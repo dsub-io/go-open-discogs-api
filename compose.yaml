@@ -1,0 +1,35 @@
+name: open-discogs-api
+
+services:
+  api:
+    image: ghcr.io/dsub-io/go-open-discogs-api:latest
+    build:
+      context: .
+    init: true
+    read_only: true
+    user: "65532:65532"
+    ports:
+      - "8080:8080"
+      - "127.0.0.1:8081:8081"
+    environment:
+      API_ADDRESS: ":8080"
+      API_MANAGEMENT_ADDRESS: ":8081"
+      API_SERVER_URL: "http://localhost:8080"
+      API_DATABASE_URL: "${API_DATABASE_URL:?set API_DATABASE_URL}"
+      API_MAX_PROCS: "${API_MAX_PROCS:-0}"
+      API_MEMORY_LIMIT_MIB: "${API_MEMORY_LIMIT_MIB:-0}"
+      API_DB_MAX_CONNS: "${API_DB_MAX_CONNS:-10}"
+      API_DB_MIN_CONNS: "${API_DB_MIN_CONNS:-0}"
+      API_DB_STATEMENT_CACHE: "${API_DB_STATEMENT_CACHE:-128}"
+      API_METRICS_ENABLED: "${API_METRICS_ENABLED:-true}"
+      API_TRACING_ENABLED: "${API_TRACING_ENABLED:-false}"
+    healthcheck:
+      test: ["CMD", "/go-open-discogs-api", "--version"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true

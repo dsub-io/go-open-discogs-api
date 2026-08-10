@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: go-open-discogs-api
+  namespace: open-discogs
+data:
+  API_ADDRESS: ":8080"
+  API_MANAGEMENT_ADDRESS: ":8081"
+  API_SERVER_URL: "https://discogs.example.com"
+  API_MAX_PROCS: "2"
+  API_MEMORY_LIMIT_MIB: "384"
+  API_DB_MAX_CONNS: "4"
+  API_DB_MIN_CONNS: "0"
+  API_DB_STATEMENT_CACHE: "64"
+  API_METRICS_ENABLED: "true"
+  API_TRACING_ENABLED: "false"

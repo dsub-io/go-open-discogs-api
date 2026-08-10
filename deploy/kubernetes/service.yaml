@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-open-discogs-api
+  namespace: open-discogs
+spec:
+  selector:
+    app.kubernetes.io/name: go-open-discogs-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

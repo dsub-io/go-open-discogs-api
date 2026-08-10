@@ -1,0 +1,51 @@
+version: 2
+
+project_name: go-open-discogs-api
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: .
+    binary: go-open-discogs-api
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/dsub-io/go-open-discogs-api/internal/buildinfo.Version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macOS
+      {{- else if eq .Os "linux" }}Linux
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: [README.md, LICENSE]
+
+checksum:
+  name_template: "{{ .ProjectName }}_checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ['^docs:', '^test:', '^style:']
+
+nfpms:
+  - maintainer: DSUB <state303@dsub.io>
+    description: High-performance read-only API for OpenDiscogs PostgreSQL data.
+    homepage: https://github.com/dsub-io/go-open-discogs-api
+    license: MIT
+    formats: [deb, rpm, apk]

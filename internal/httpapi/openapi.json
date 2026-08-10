@@ -1,0 +1,461 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenDiscogs API",
+    "version": "0.1.0",
+    "description": "High-performance read-only API for PostgreSQL databases populated from public Discogs data dumps."
+  },
+  "servers": [{"url": "/"}],
+  "paths": {
+    "/artists": {
+      "get": {
+        "operationId": "searchArtists",
+        "tags": ["artists"],
+        "parameters": [
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/Size"},
+          {"$ref": "#/components/parameters/Sort"},
+          {"$ref": "#/components/parameters/Name"},
+          {"$ref": "#/components/parameters/RealName"},
+          {"$ref": "#/components/parameters/Profile"}
+        ],
+        "responses": {
+          "200": {"description": "Artist page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ArtistPage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/artists/{id}": {
+      "get": {
+        "operationId": "getArtist",
+        "tags": ["artists"],
+        "parameters": [{"$ref": "#/components/parameters/ID"}],
+        "responses": {
+          "200": {"description": "Artist detail", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ArtistDetail"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/artists/{id}/releases": {
+      "get": {
+        "operationId": "getArtistReleases",
+        "tags": ["artists", "releases"],
+        "parameters": [
+          {"$ref": "#/components/parameters/ID"},
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/Size"},
+          {"$ref": "#/components/parameters/Sort"}
+        ],
+        "responses": {
+          "200": {"description": "Artist release page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ArtistReleasePage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/labels": {
+      "get": {
+        "operationId": "searchLabels",
+        "tags": ["labels"],
+        "parameters": [
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/Size"},
+          {"$ref": "#/components/parameters/Sort"},
+          {"$ref": "#/components/parameters/Name"},
+          {"$ref": "#/components/parameters/Profile"},
+          {"$ref": "#/components/parameters/ContactInfo"},
+          {"$ref": "#/components/parameters/DataQuality"}
+        ],
+        "responses": {
+          "200": {"description": "Label page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LabelPage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/labels/{id}": {
+      "get": {
+        "operationId": "getLabel",
+        "tags": ["labels"],
+        "parameters": [{"$ref": "#/components/parameters/ID"}],
+        "responses": {
+          "200": {"description": "Label detail", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LabelDetail"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/labels/{id}/releases": {
+      "get": {
+        "operationId": "getLabelReleases",
+        "tags": ["labels", "releases"],
+        "parameters": [
+          {"$ref": "#/components/parameters/ID"},
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/Size"},
+          {"$ref": "#/components/parameters/Sort"}
+        ],
+        "responses": {
+          "200": {"description": "Label release page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LabelReleasePage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/masters": {
+      "get": {
+        "operationId": "searchMasters",
+        "tags": ["masters"],
+        "parameters": [
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/Size"},
+          {"$ref": "#/components/parameters/Sort"},
+          {"$ref": "#/components/parameters/Title"},
+          {"$ref": "#/components/parameters/Year"}
+        ],
+        "responses": {
+          "200": {"description": "Master page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MasterPage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/masters/{id}": {
+      "get": {
+        "operationId": "getMaster",
+        "tags": ["masters"],
+        "parameters": [{"$ref": "#/components/parameters/ID"}],
+        "responses": {
+          "200": {"description": "Master detail", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MasterDetail"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/masters/{id}/releases": {
+      "get": {
+        "operationId": "getMasterReleases",
+        "tags": ["masters", "releases"],
+        "parameters": [
+          {"$ref": "#/components/parameters/ID"},
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/Size"},
+          {"$ref": "#/components/parameters/Sort"}
+        ],
+        "responses": {
+          "200": {"description": "Master release page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MasterReleasePage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/releases": {
+      "get": {
+        "operationId": "searchReleases",
+        "tags": ["releases"],
+        "parameters": [
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/Size"},
+          {"$ref": "#/components/parameters/Sort"},
+          {"$ref": "#/components/parameters/Title"},
+          {"$ref": "#/components/parameters/Country"},
+          {"$ref": "#/components/parameters/Year"},
+          {"$ref": "#/components/parameters/Month"},
+          {"$ref": "#/components/parameters/Master"}
+        ],
+        "responses": {
+          "200": {"description": "Release page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReleasePage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/releases/{id}": {
+      "get": {
+        "operationId": "getRelease",
+        "tags": ["releases"],
+        "parameters": [{"$ref": "#/components/parameters/ID"}],
+        "responses": {
+          "200": {"description": "Release detail", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReleaseDetail"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "operationId": "getVersion",
+        "tags": ["system"],
+        "responses": {
+          "200": {"description": "Build version", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Version"}}}}
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ID": {"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64", "minimum": 1, "maximum": 2147483647}},
+      "Page": {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}},
+      "Size": {"name": "size", "in": "query", "description": "Values above 30 are capped at 30.", "schema": {"type": "integer", "minimum": 1, "maximum": 30, "default": 20}},
+      "Sort": {"name": "sort", "in": "query", "description": "Repeatable field,direction pair. Direction is asc or desc.", "schema": {"type": "array", "items": {"type": "string"}}, "explode": true},
+      "Name": {"name": "name", "in": "query", "schema": {"type": "string"}},
+      "RealName": {"name": "real_name", "in": "query", "schema": {"type": "string"}},
+      "Profile": {"name": "profile", "in": "query", "schema": {"type": "string"}},
+      "ContactInfo": {"name": "contact_info", "in": "query", "schema": {"type": "string"}},
+      "DataQuality": {"name": "data_quality", "in": "query", "schema": {"type": "string"}},
+      "Title": {"name": "title", "in": "query", "schema": {"type": "string"}},
+      "Country": {"name": "country", "in": "query", "schema": {"type": "string"}},
+      "Year": {"name": "year", "in": "query", "schema": {"type": "integer", "minimum": 0, "maximum": 32767}},
+      "Month": {"name": "month", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 12}},
+      "Master": {"name": "master", "in": "query", "schema": {"type": "boolean"}}
+    },
+    "responses": {
+      "BadRequest": {"description": "Invalid request", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}},
+      "NotFound": {"description": "Resource not found", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}},
+      "GatewayTimeout": {"description": "Database query timeout", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}}
+    },
+    "schemas": {
+      "NullableString": {"type": ["string", "null"]},
+      "NullableInteger": {"type": ["integer", "null"]},
+      "NullableBoolean": {"type": ["boolean", "null"]},
+      "PageEnvelope": {
+        "type": "object",
+        "required": ["items", "total_elements", "total_pages", "page_number", "page_size", "last", "first", "sorted", "resource_uri"],
+        "properties": {
+          "total_elements": {"type": "integer", "format": "int64"},
+          "total_pages": {"type": "integer"},
+          "page_number": {"type": "integer"},
+          "page_size": {"type": "integer"},
+          "last": {"type": "boolean"},
+          "first": {"type": "boolean"},
+          "sorted": {"type": "boolean"},
+          "resource_uri": {"type": "string"}
+        }
+      },
+      "Artist": {
+        "type": "object",
+        "required": ["id", "name", "real_name", "profile", "data_quality"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "name": {"$ref": "#/components/schemas/NullableString"},
+          "real_name": {"$ref": "#/components/schemas/NullableString"},
+          "profile": {"$ref": "#/components/schemas/NullableString"},
+          "data_quality": {"$ref": "#/components/schemas/NullableString"}
+        }
+      },
+      "ArtistReference": {
+        "type": "object",
+        "required": ["id", "name", "resource_url"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "name": {"$ref": "#/components/schemas/NullableString"},
+          "resource_url": {"type": "string", "format": "uri"}
+        }
+      },
+      "ArtistDetail": {
+        "allOf": [
+          {"$ref": "#/components/schemas/Artist"},
+          {"type": "object", "required": ["members", "groups", "aliases", "namevariations", "urls", "uri", "release_url"], "properties": {
+            "members": {"type": "array", "items": {"$ref": "#/components/schemas/ArtistReference"}},
+            "groups": {"type": "array", "items": {"$ref": "#/components/schemas/ArtistReference"}},
+            "aliases": {"type": "array", "items": {"$ref": "#/components/schemas/ArtistReference"}},
+            "namevariations": {"type": "array", "items": {"type": "string"}},
+            "urls": {"type": "array", "items": {"type": "string"}},
+            "uri": {"type": "string", "format": "uri"},
+            "release_url": {"type": "string", "format": "uri"}
+          }}
+        ]
+      },
+      "ArtistRelease": {
+        "allOf": [
+          {"$ref": "#/components/schemas/Release"},
+          {"type": "object", "required": ["role", "resource_url"], "properties": {
+            "role": {"$ref": "#/components/schemas/NullableString"},
+            "resource_url": {"type": "string", "format": "uri"}
+          }}
+        ]
+      },
+      "Label": {
+        "type": "object",
+        "required": ["id", "contact_info", "data_quality", "name", "profile"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "contact_info": {"$ref": "#/components/schemas/NullableString"},
+          "data_quality": {"$ref": "#/components/schemas/NullableString"},
+          "name": {"$ref": "#/components/schemas/NullableString"},
+          "profile": {"$ref": "#/components/schemas/NullableString"}
+        }
+      },
+      "LabelReference": {
+        "type": "object",
+        "required": ["id", "name", "resource_url"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "name": {"$ref": "#/components/schemas/NullableString"},
+          "resource_url": {"type": "string", "format": "uri"}
+        }
+      },
+      "LabelDetail": {
+        "allOf": [
+          {"$ref": "#/components/schemas/Label"},
+          {"type": "object", "required": ["parent_label", "sublabels", "urls", "uri", "release_url"], "properties": {
+            "parent_label": {"oneOf": [{"$ref": "#/components/schemas/LabelReference"}, {"type": "null"}]},
+            "sublabels": {"type": "array", "items": {"$ref": "#/components/schemas/LabelReference"}},
+            "urls": {"type": "array", "items": {"type": "string"}},
+            "uri": {"type": "string", "format": "uri"},
+            "release_url": {"type": "string", "format": "uri"}
+          }}
+        ]
+      },
+      "LabelRelease": {
+        "type": "object",
+        "required": ["id", "artist", "title", "year", "status", "catno", "format"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "artist": {"$ref": "#/components/schemas/NullableString"},
+          "title": {"$ref": "#/components/schemas/NullableString"},
+          "year": {"$ref": "#/components/schemas/NullableInteger"},
+          "status": {"$ref": "#/components/schemas/NullableString"},
+          "catno": {"$ref": "#/components/schemas/NullableString"},
+          "format": {"$ref": "#/components/schemas/NullableString"}
+        }
+      },
+      "Master": {
+        "type": "object",
+        "required": ["id", "data_quality", "title", "released_year"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "data_quality": {"$ref": "#/components/schemas/NullableString"},
+          "title": {"$ref": "#/components/schemas/NullableString"},
+          "released_year": {"$ref": "#/components/schemas/NullableInteger"}
+        }
+      },
+      "MasterDetail": {
+        "type": "object",
+        "required": ["id", "title", "data_quality", "main_release", "year", "genres", "styles", "artists", "videos"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "title": {"$ref": "#/components/schemas/NullableString"},
+          "data_quality": {"$ref": "#/components/schemas/NullableString"},
+          "main_release": {"$ref": "#/components/schemas/NullableInteger"},
+          "year": {"$ref": "#/components/schemas/NullableInteger"},
+          "genres": {"type": "array", "items": {"type": "string"}},
+          "styles": {"type": "array", "items": {"type": "string"}},
+          "artists": {"type": "array", "items": {"$ref": "#/components/schemas/ArtistReference"}},
+          "videos": {"type": "array", "items": {"$ref": "#/components/schemas/Video"}}
+        }
+      },
+      "MasterRelease": {
+        "type": "object",
+        "required": ["id", "title", "artist", "artist_id", "year", "resource_url"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "title": {"$ref": "#/components/schemas/NullableString"},
+          "artist": {"type": "array", "items": {"type": "string"}},
+          "artist_id": {"type": "array", "items": {"type": "integer", "format": "int64"}},
+          "year": {"$ref": "#/components/schemas/NullableInteger"},
+          "resource_url": {"type": "string", "format": "uri"}
+        }
+      },
+      "Release": {
+        "type": "object",
+        "required": ["id", "title", "country", "data_quality", "released_year", "released_month", "released_day", "listed_release_date", "is_master", "master_id", "notes", "status"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "title": {"$ref": "#/components/schemas/NullableString"},
+          "country": {"$ref": "#/components/schemas/NullableString"},
+          "data_quality": {"$ref": "#/components/schemas/NullableString"},
+          "released_year": {"$ref": "#/components/schemas/NullableInteger"},
+          "released_month": {"$ref": "#/components/schemas/NullableInteger"},
+          "released_day": {"$ref": "#/components/schemas/NullableInteger"},
+          "listed_release_date": {"$ref": "#/components/schemas/NullableString"},
+          "is_master": {"$ref": "#/components/schemas/NullableBoolean"},
+          "master_id": {"$ref": "#/components/schemas/NullableInteger"},
+          "notes": {"$ref": "#/components/schemas/NullableString"},
+          "status": {"$ref": "#/components/schemas/NullableString"}
+        }
+      },
+      "ReleaseArtist": {
+        "type": "object",
+        "required": ["id", "name", "role", "resource_url"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "name": {"$ref": "#/components/schemas/NullableString"},
+          "role": {"$ref": "#/components/schemas/NullableString"},
+          "resource_url": {"type": "string", "format": "uri"}
+        }
+      },
+      "ReleaseLabel": {
+        "type": "object",
+        "required": ["id", "name", "catno", "resource_url"],
+        "properties": {
+          "id": {"type": "integer", "format": "int64"},
+          "name": {"$ref": "#/components/schemas/NullableString"},
+          "catno": {"$ref": "#/components/schemas/NullableString"},
+          "resource_url": {"type": "string", "format": "uri"}
+        }
+      },
+      "ReleaseFormat": {
+        "type": "object",
+        "required": ["name", "qty", "descriptions"],
+        "properties": {
+          "name": {"$ref": "#/components/schemas/NullableString"},
+          "qty": {"$ref": "#/components/schemas/NullableInteger"},
+          "descriptions": {"type": "array", "items": {"type": "string"}}
+        }
+      },
+      "Video": {
+        "type": "object",
+        "required": ["title", "url", "description"],
+        "properties": {
+          "title": {"$ref": "#/components/schemas/NullableString"},
+          "url": {"$ref": "#/components/schemas/NullableString"},
+          "description": {"$ref": "#/components/schemas/NullableString"}
+        }
+      },
+      "ReleaseDetail": {
+        "allOf": [
+          {"$ref": "#/components/schemas/Release"},
+          {"type": "object", "required": ["artists", "labels", "companies", "formats", "styles", "genres", "videos"], "properties": {
+            "artists": {"type": "array", "items": {"$ref": "#/components/schemas/ReleaseArtist"}},
+            "labels": {"type": "array", "items": {"$ref": "#/components/schemas/ReleaseLabel"}},
+            "companies": {"type": "array", "items": {"$ref": "#/components/schemas/ReleaseLabel"}},
+            "formats": {"type": "array", "items": {"$ref": "#/components/schemas/ReleaseFormat"}},
+            "styles": {"type": "array", "items": {"type": "string"}},
+            "genres": {"type": "array", "items": {"type": "string"}},
+            "videos": {"type": "array", "items": {"$ref": "#/components/schemas/Video"}}
+          }}
+        ]
+      },
+      "ArtistPage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Artist"}}}}]},
+      "ArtistReleasePage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/ArtistRelease"}}}}]},
+      "LabelPage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Label"}}}}]},
+      "LabelReleasePage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/LabelRelease"}}}}]},
+      "MasterPage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Master"}}}}]},
+      "MasterReleasePage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/MasterRelease"}}}}]},
+      "ReleasePage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Release"}}}}]},
+      "Problem": {
+        "type": "object",
+        "required": ["type", "title", "status", "detail", "instance"],
+        "properties": {
+          "type": {"type": "string"},
+          "title": {"type": "string"},
+          "status": {"type": "integer"},
+          "detail": {"type": "string"},
+          "instance": {"type": "string"}
+        }
+      },
+      "Version": {
+        "type": "object",
+        "required": ["version"],
+        "properties": {"version": {"type": "string"}}
+      }
+    }
+  }
+}
