@@ -46,7 +46,9 @@ go run . \
 
 CLI values override ENV values, which override defaults. Prefer ENV, Docker secrets, or Kubernetes Secrets for credentials because CLI arguments can be visible in the host process list.
 
-`--help` and `--version` do not connect to PostgreSQL.
+`--help` and `--version` do not connect to PostgreSQL. `--healthcheck` probes
+`http://127.0.0.1:8081/readyz` and exits non-zero unless both the management
+listener and PostgreSQL are ready; Compose uses this process control.
 
 ## Configuration inventory
 
@@ -78,7 +80,8 @@ Every runtime setting exposed by CLI has an ENV equivalent with identical meanin
 | `--otlp-endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT` | string | empty | conditional | no | Required only when tracing is enabled. |
 | `--trace-sample-ratio` | `OTEL_TRACES_SAMPLER_ARG` | float | `0.1` | optional | no | Parent-based trace sampling ratio from 0 through 1. |
 
-`--version` is a process control command, not a runtime setting.
+`--version` and `--healthcheck` are process control commands, not runtime
+settings, so they do not have ENV equivalents.
 
 ## HTTP contracts
 

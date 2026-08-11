@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"math"
@@ -23,7 +24,10 @@ const (
 	testListenerMessage    = "HTTP listener started"
 )
 
-var errWriter = errors.New("writer failure")
+var (
+	errProbe  = errors.New("probe failure")
+	errWriter = errors.New("writer failure")
+)
 
 func TestRunControlPaths(t *testing.T) {
 	t.Parallel()
@@ -36,6 +40,31 @@ func TestRunControlPaths(t *testing.T) {
 	}
 	if err := run([]string{"--help"}, emptyEnvironment, io.Discard, io.Discard); err != nil {
 		t.Fatal(err)
+	}
+	probeCalled := false
+	if err := runWithReadinessProbe(
+		[]string{"--healthcheck"},
+		emptyEnvironment,
+		io.Discard,
+		io.Discard,
+		func(ctx context.Context) error {
+			probeCalled = true
+			if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+				t.Fatal("readiness context has no deadline")
+			}
+			return nil
+		},
+	); err != nil || !probeCalled {
+		t.Fatalf("healthcheck called=%t err=%v", probeCalled, err)
+	}
+	if err := runWithReadinessProbe(
+		[]string{"--healthcheck"},
+		emptyEnvironment,
+		io.Discard,
+		io.Discard,
+		func(context.Context) error { return errProbe },
+	); !errors.Is(err, errProbe) {
+		t.Fatalf("healthcheck error=%v", err)
 	}
 	if err := run([]string{"--unknown"}, emptyEnvironment, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "load configuration") {
 		t.Fatalf("configuration error=%v", err)
