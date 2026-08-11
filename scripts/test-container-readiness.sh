@@ -8,6 +8,7 @@ readonly api_container="${owner}-api"
 readonly database_container="${owner}-database"
 readonly network="${owner}-network"
 readonly postgres_image="postgres:18-alpine"
+readonly model_module="github.com/dsub-io/open-discogs-model"
 postgres_image_was_present=false
 
 container_owner() {
@@ -135,6 +136,18 @@ if [ "$ready" = false ]; then
   printf 'PostgreSQL readiness test container did not become ready.\n' >&2
   exit 1
 fi
+
+go mod download "$model_module"
+model_directory="$(go list -m -f '{{.Dir}}' "$model_module")"
+migration_directory="$model_directory/schema/migrations"
+if [ ! -d "$migration_directory" ]; then
+  printf 'Canonical migration directory is unavailable: %s\n' "$migration_directory" >&2
+  exit 1
+fi
+for migration in "$migration_directory"/*.sql; do
+  docker exec --interactive "$database_container" \
+    psql --set ON_ERROR_STOP=1 --username discogs --dbname discogs < "$migration" >/dev/null
+done
 
 docker run \
   --detach \

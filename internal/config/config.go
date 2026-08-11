@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ const (
 	FlagQueryTimeout      = "query-timeout"
 	FlagShutdownTimeout   = "shutdown-timeout"
 	FlagDatabaseURL       = "database-url"
+	FlagDatabaseSchema    = "database-schema"
 	FlagDatabaseHost      = "db-host"
 	FlagDatabaseUsername  = "db-username"
 	FlagDatabasePassword  = "db-password"
@@ -53,6 +55,7 @@ const (
 	EnvQueryTimeout      = "API_QUERY_TIMEOUT"
 	EnvShutdownTimeout   = "API_SHUTDOWN_TIMEOUT"
 	EnvDatabaseURL       = "API_DATABASE_URL"
+	EnvDatabaseSchema    = "API_DATABASE_SCHEMA"
 	EnvDatabaseHost      = "API_DB_HOST"
 	EnvDatabaseUsername  = "API_DB_USERNAME"
 	EnvDatabasePassword  = "API_DB_PASSWORD"
@@ -72,6 +75,7 @@ const (
 	DefaultCacheControl       = "public, max-age=60, stale-while-revalidate=300"
 	DefaultLogLevel           = "info"
 	DefaultDatabaseName       = "discogs"
+	DefaultDatabaseSchema     = "public"
 	DefaultDatabaseSSLMode    = "prefer"
 	DefaultDatabaseMaxConns   = 10
 	DefaultDatabaseMinConns   = 0
@@ -88,6 +92,7 @@ const (
 	DefaultHealthCheckPeriod  = 30 * time.Second
 	MaximumConnections        = 1024
 	MaximumStatementCacheSize = 65536
+	MaximumSchemaNameLength   = 63
 
 	TypeString   ValueType = "string"
 	TypeBoolean  ValueType = "boolean"
@@ -149,6 +154,7 @@ type Tracing struct {
 
 type Database struct {
 	URL                string
+	Schema             string
 	MaxConnections     int32
 	MinConnections     int32
 	MaxConnectionIdle  time.Duration
@@ -169,13 +175,14 @@ type rawValues struct {
 	queryTimeout      time.Duration
 	shutdownTimeout   time.Duration
 	databaseURL       string
+	databaseSchema    string
 	databaseHost      string
 	databaseUsername  string
 	databasePassword  string
 	databaseName      string
 	databaseSSLMode   string
-	databaseMaxConns  int
-	databaseMinConns  int
+	databaseMaxConns  int64
+	databaseMinConns  int64
 	statementCache    int
 	metricsEnabled    bool
 	tracingEnabled    bool
@@ -230,6 +237,7 @@ func Inventory() []Definition {
 		{Flag: FlagQueryTimeout, Environment: EnvQueryTimeout, Type: TypeDuration, Default: DefaultQueryTimeout.String(), Requirement: RequirementOptional, Description: "Maximum PostgreSQL operation duration."},
 		{Flag: FlagShutdownTimeout, Environment: EnvShutdownTimeout, Type: TypeDuration, Default: DefaultShutdownTimeout.String(), Requirement: RequirementOptional, Description: "Graceful shutdown deadline."},
 		{Flag: FlagDatabaseURL, Environment: EnvDatabaseURL, Type: TypeString, Requirement: RequirementConditional, Sensitive: true, Description: "Complete PostgreSQL URL; overrides split database settings."},
+		{Flag: FlagDatabaseSchema, Environment: EnvDatabaseSchema, Type: TypeString, Default: DefaultDatabaseSchema, Requirement: RequirementOptional, Description: "PostgreSQL schema containing canonical OpenDiscogs tables."},
 		{Flag: FlagDatabaseHost, Environment: EnvDatabaseHost, Type: TypeString, Requirement: RequirementConditional, Description: "PostgreSQL host and port when database-url is unset."},
 		{Flag: FlagDatabaseUsername, Environment: EnvDatabaseUsername, Type: TypeString, Requirement: RequirementConditional, Description: "PostgreSQL username when database-url is unset."},
 		{Flag: FlagDatabasePassword, Environment: EnvDatabasePassword, Type: TypeString, Requirement: RequirementConditional, Sensitive: true, Description: "PostgreSQL password when database-url is unset."},
@@ -258,13 +266,14 @@ func bindFlags(flags *flag.FlagSet, values *rawValues) {
 	flags.DurationVar(&values.queryTimeout, FlagQueryTimeout, values.queryTimeout, description(FlagQueryTimeout))
 	flags.DurationVar(&values.shutdownTimeout, FlagShutdownTimeout, values.shutdownTimeout, description(FlagShutdownTimeout))
 	flags.StringVar(&values.databaseURL, FlagDatabaseURL, values.databaseURL, description(FlagDatabaseURL))
+	flags.StringVar(&values.databaseSchema, FlagDatabaseSchema, values.databaseSchema, description(FlagDatabaseSchema))
 	flags.StringVar(&values.databaseHost, FlagDatabaseHost, values.databaseHost, description(FlagDatabaseHost))
 	flags.StringVar(&values.databaseUsername, FlagDatabaseUsername, values.databaseUsername, description(FlagDatabaseUsername))
 	flags.StringVar(&values.databasePassword, FlagDatabasePassword, values.databasePassword, description(FlagDatabasePassword))
 	flags.StringVar(&values.databaseName, FlagDatabaseName, values.databaseName, description(FlagDatabaseName))
 	flags.StringVar(&values.databaseSSLMode, FlagDatabaseSSLMode, values.databaseSSLMode, description(FlagDatabaseSSLMode))
-	flags.IntVar(&values.databaseMaxConns, FlagDatabaseMaxConns, values.databaseMaxConns, description(FlagDatabaseMaxConns))
-	flags.IntVar(&values.databaseMinConns, FlagDatabaseMinConns, values.databaseMinConns, description(FlagDatabaseMinConns))
+	flags.Int64Var(&values.databaseMaxConns, FlagDatabaseMaxConns, values.databaseMaxConns, description(FlagDatabaseMaxConns))
+	flags.Int64Var(&values.databaseMinConns, FlagDatabaseMinConns, values.databaseMinConns, description(FlagDatabaseMinConns))
 	flags.IntVar(&values.statementCache, FlagStatementCache, values.statementCache, description(FlagStatementCache))
 	flags.BoolVar(&values.metricsEnabled, FlagMetricsEnabled, values.metricsEnabled, description(FlagMetricsEnabled))
 	flags.BoolVar(&values.tracingEnabled, FlagTracingEnabled, values.tracingEnabled, description(FlagTracingEnabled))
@@ -280,7 +289,8 @@ func environmentValues(lookup LookupEnv) (rawValues, error) {
 		serverURL: value(lookup, EnvServerURL, DefaultServerURL), cacheControl: value(lookup, EnvCacheControl, DefaultCacheControl),
 		logLevel: value(lookup, EnvLogLevel, DefaultLogLevel), queryTimeout: DefaultQueryTimeout,
 		shutdownTimeout: DefaultShutdownTimeout, databaseURL: value(lookup, EnvDatabaseURL, ""),
-		databaseHost: value(lookup, EnvDatabaseHost, ""), databaseUsername: value(lookup, EnvDatabaseUsername, ""),
+		databaseSchema: value(lookup, EnvDatabaseSchema, DefaultDatabaseSchema),
+		databaseHost:   value(lookup, EnvDatabaseHost, ""), databaseUsername: value(lookup, EnvDatabaseUsername, ""),
 		databasePassword: value(lookup, EnvDatabasePassword, ""), databaseName: value(lookup, EnvDatabaseName, DefaultDatabaseName),
 		databaseSSLMode: value(lookup, EnvDatabaseSSLMode, DefaultDatabaseSSLMode), databaseMaxConns: DefaultDatabaseMaxConns,
 		databaseMinConns: DefaultDatabaseMinConns, statementCache: DefaultStatementCacheSize,
@@ -302,10 +312,10 @@ func environmentValues(lookup LookupEnv) (rawValues, error) {
 	if values.shutdownTimeout, err = environmentDuration(lookup, EnvShutdownTimeout, DefaultShutdownTimeout); err != nil {
 		return rawValues{}, err
 	}
-	if values.databaseMaxConns, err = environmentInt(lookup, EnvDatabaseMaxConns, DefaultDatabaseMaxConns); err != nil {
+	if values.databaseMaxConns, err = environmentInt64(lookup, EnvDatabaseMaxConns, DefaultDatabaseMaxConns); err != nil {
 		return rawValues{}, err
 	}
-	if values.databaseMinConns, err = environmentInt(lookup, EnvDatabaseMinConns, DefaultDatabaseMinConns); err != nil {
+	if values.databaseMinConns, err = environmentInt64(lookup, EnvDatabaseMinConns, DefaultDatabaseMinConns); err != nil {
 		return rawValues{}, err
 	}
 	if values.statementCache, err = environmentInt(lookup, EnvStatementCache, DefaultStatementCacheSize); err != nil {
@@ -345,11 +355,25 @@ func validate(values rawValues) (Config, error) {
 	if values.maxProcs < 0 {
 		return Config{}, fmt.Errorf("%s must be zero or positive", FlagMaxProcs)
 	}
+	if !validSchemaName(values.databaseSchema) {
+		return Config{}, fmt.Errorf(
+			"%s must be 1 to %d lowercase letters, digits, or underscores and start with a letter or underscore",
+			FlagDatabaseSchema,
+			MaximumSchemaNameLength,
+		)
+	}
 	if values.memoryLimitMiB < 0 {
 		return Config{}, fmt.Errorf("%s must be zero or positive", FlagMemoryLimitMiB)
 	}
 	if int64(values.memoryLimitMiB) > math.MaxInt64>>20 {
 		return Config{}, fmt.Errorf("%s is too large to represent in bytes", FlagMemoryLimitMiB)
+	}
+	if values.databaseMaxConns > math.MaxInt32 || values.databaseMinConns > math.MaxInt32 {
+		return Config{}, fmt.Errorf(
+			"%s and %s must fit signed 32-bit PostgreSQL connection counts",
+			FlagDatabaseMaxConns,
+			FlagDatabaseMinConns,
+		)
 	}
 	if values.databaseMaxConns < 1 || values.databaseMaxConns > MaximumConnections {
 		return Config{}, fmt.Errorf("%s must be between 1 and %d", FlagDatabaseMaxConns, MaximumConnections)
@@ -380,11 +404,18 @@ func validate(values rawValues) (Config, error) {
 		ShutdownTimeout: values.shutdownTimeout, QueryTimeout: values.queryTimeout, MetricsEnabled: values.metricsEnabled,
 		Tracing: Tracing{Enabled: values.tracingEnabled, Endpoint: values.otlpEndpoint, SampleRatio: values.traceSampleRatio},
 		Database: Database{
-			URL: databaseURL, MaxConnections: int32(values.databaseMaxConns), MinConnections: int32(values.databaseMinConns),
+			URL: databaseURL, Schema: values.databaseSchema,
+			MaxConnections: int32(values.databaseMaxConns), MinConnections: int32(values.databaseMinConns),
 			MaxConnectionIdle: DefaultMaxConnectionIdle, MaxConnectionLife: DefaultMaxConnectionLife,
 			HealthCheckPeriod: DefaultHealthCheckPeriod, StatementCacheSize: values.statementCache,
 		},
 	}, nil
+}
+
+var schemaNamePattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
+
+func validSchemaName(name string) bool {
+	return len(name) > 0 && len(name) <= MaximumSchemaNameLength && schemaNamePattern.MatchString(name)
 }
 
 func buildDatabaseURL(values rawValues) (string, error) {
@@ -448,6 +479,18 @@ func environmentInt(lookup LookupEnv, name string, fallback int) (int, error) {
 		return fallback, nil
 	}
 	parsed, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer", name)
+	}
+	return parsed, nil
+}
+
+func environmentInt64(lookup LookupEnv, name string, fallback int64) (int64, error) {
+	raw := strings.TrimSpace(value(lookup, name, ""))
+	if raw == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("%s must be an integer", name)
 	}

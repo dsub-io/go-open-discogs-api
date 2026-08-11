@@ -27,6 +27,9 @@ func TestLoadDefaultsAndOverrides(t *testing.T) {
 	if config.Database.URL != testDatabaseURL || config.Database.MaxConnections != DefaultDatabaseMaxConns || config.Database.MinConnections != DefaultDatabaseMinConns {
 		t.Fatalf("unexpected database defaults: %+v", config.Database)
 	}
+	if config.Database.Schema != DefaultDatabaseSchema {
+		t.Fatalf("unexpected database schema: %s", config.Database.Schema)
+	}
 	if config.MemoryLimitBytes != 0 || config.MaxProcs != 0 || !config.MetricsEnabled || config.Tracing.Enabled {
 		t.Fatalf("unexpected runtime defaults: %+v", config)
 	}
@@ -35,10 +38,11 @@ func TestLoadDefaultsAndOverrides(t *testing.T) {
 		EnvAddress: ":9000", EnvManagementAddress: "127.0.0.1:9001", EnvServerURL: "https://api.example.com/",
 		EnvCacheControl: "private", EnvAccessLog: "true", EnvMaxProcs: "3", EnvMemoryLimitMiB: "256",
 		EnvLogLevel: "warn", EnvQueryTimeout: "2s", EnvShutdownTimeout: "3s", EnvDatabaseURL: testDatabaseURL,
+		EnvDatabaseSchema:   "env_schema",
 		EnvDatabaseMaxConns: "7", EnvDatabaseMinConns: "1", EnvStatementCache: "32", EnvMetricsEnabled: "false",
 		EnvTracingEnabled: "true", EnvOTLPEndpoint: "http://collector:4318", EnvTraceSampleRatio: "0.5",
 	}
-	result, err = Load([]string{"--address=:9100", "--max-procs=4", "--memory-limit-mib=128"}, mapLookup(environment), &bytes.Buffer{})
+	result, err = Load([]string{"--address=:9100", "--max-procs=4", "--memory-limit-mib=128", "--database-schema=cli_schema"}, mapLookup(environment), &bytes.Buffer{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,6 +58,9 @@ func TestLoadDefaultsAndOverrides(t *testing.T) {
 	}
 	if config.Database.MaxConnections != 7 || config.Database.MinConnections != 1 || config.Database.StatementCacheSize != 32 {
 		t.Fatalf("database override failed: %+v", config.Database)
+	}
+	if config.Database.Schema != "cli_schema" {
+		t.Fatalf("database schema precedence failed: %+v", config.Database)
 	}
 	if config.MetricsEnabled || !config.Tracing.Enabled || config.Tracing.Endpoint != "http://collector:4318" || config.Tracing.SampleRatio != 0.5 {
 		t.Fatalf("telemetry override failed: %+v", config)
@@ -119,6 +126,9 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		{"management address", merge(validEnvironment(), EnvManagementAddress, "bad address"), nil, FlagManagementAddress},
 		{"log level", merge(validEnvironment(), EnvLogLevel, "verbose"), nil, FlagLogLevel},
 		{"database URL", map[string]string{EnvDatabaseURL: "http://example.com"}, nil, "absolute PostgreSQL URL"},
+		{"database schema empty", validEnvironment(), []string{"--database-schema="}, FlagDatabaseSchema},
+		{"database schema syntax", validEnvironment(), []string{"--database-schema=Open-Discogs"}, FlagDatabaseSchema},
+		{"database schema long", validEnvironment(), []string{"--database-schema=" + strings.Repeat("a", 64)}, FlagDatabaseSchema},
 		{"missing database", map[string]string{}, nil, "split database settings"},
 		{"split host", splitEnvironment("localhost", "discogs"), nil, "must include host and port"},
 		{"split database", splitEnvironment("localhost:5432", "bad/name"), nil, "must be a database name"},
@@ -127,6 +137,7 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		{"memory overflow", validEnvironment(), []string{"--memory-limit-mib=8796093022208"}, "too large"},
 		{"max conns low", validEnvironment(), []string{"--db-max-conns=0"}, FlagDatabaseMaxConns},
 		{"max conns high", validEnvironment(), []string{"--db-max-conns=1025"}, FlagDatabaseMaxConns},
+		{"max conns int32 overflow", validEnvironment(), []string{"--db-max-conns=2147483648"}, FlagDatabaseMaxConns},
 		{"min conns low", validEnvironment(), []string{"--db-min-conns=-1"}, FlagDatabaseMinConns},
 		{"min conns high", validEnvironment(), []string{"--db-max-conns=2", "--db-min-conns=3"}, FlagDatabaseMinConns},
 		{"statement low", validEnvironment(), []string{"--db-statement-cache=-1"}, FlagStatementCache},

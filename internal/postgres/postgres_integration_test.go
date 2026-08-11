@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,10 +17,11 @@ import (
 )
 
 const (
-	envTestDatabaseURL     = "TEST_DATABASE_URL"
-	defaultTestDatabaseURL = "postgres://discogs:discogs@127.0.0.1:55432/discogs?sslmode=disable"
-	testPublicURL          = "https://api.example.com"
-	testQueryTimeout       = 5 * time.Second
+	envTestDatabaseURL              = "TEST_DATABASE_URL"
+	defaultTestDatabaseURL          = "postgres://discogs:discogs@127.0.0.1:55432/discogs?sslmode=disable"
+	testPublicURL                   = "https://api.example.com"
+	testQueryTimeout                = 5 * time.Second
+	testSchemaMigrationLockID int64 = 7_803_151_124
 )
 
 var integrationPool *pgxpool.Pool
@@ -227,6 +229,175 @@ func TestStoreQueryErrorsFromClosedPool(t *testing.T) {
 	}
 }
 
+func TestValidateSchemaBoundaries(t *testing.T) {
+	ctx := context.Background()
+	if err := ValidateSchema(ctx, integrationPool, "public"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ValidateSchema(ctx, integrationPool, "missing_schema"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("missing schema error=%v", err)
+	}
+
+	const incompleteSchema = "api_incomplete"
+	if _, err := integrationPool.Exec(ctx, "DROP SCHEMA IF EXISTS "+incompleteSchema+" CASCADE"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integrationPool.Exec(ctx, "CREATE SCHEMA "+incompleteSchema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = integrationPool.Exec(context.Background(), "DROP SCHEMA IF EXISTS "+incompleteSchema+" CASCADE")
+	})
+	if err := ValidateSchema(ctx, integrationPool, incompleteSchema); err == nil || !strings.Contains(err.Error(), "missing required API tables") {
+		t.Fatalf("incomplete schema error=%v", err)
+	}
+
+	testSchemaUsageDenied(t, ctx)
+	testTableSelectDenied(t, ctx)
+
+	closedPool, err := pgxpool.New(ctx, integrationPool.Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedPool.Close()
+	if err := ValidateSchema(ctx, closedPool, "public"); err == nil || !strings.Contains(err.Error(), "inspect database schema") {
+		t.Fatalf("closed pool error=%v", err)
+	}
+}
+
+func TestStoreReadsSelectedCustomSchema(t *testing.T) {
+	const schemaName = "api_custom"
+	ctx := context.Background()
+	if _, err := integrationPool.Exec(ctx, "DROP SCHEMA IF EXISTS "+schemaName+" CASCADE"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = integrationPool.Exec(context.Background(), "DROP SCHEMA IF EXISTS "+schemaName+" CASCADE")
+	})
+	migrations, err := canonicalschema.Migrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialMigration, err := fs.ReadFile(migrations, "V001__initial_schema.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integrationPool.Exec(ctx, "CREATE SCHEMA "+schemaName); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integrationPool.Exec(ctx, strings.ReplaceAll(string(initialMigration), "public.", schemaName+".")); err != nil {
+		t.Fatal(err)
+	}
+
+	poolConfig, err := pgxpool.ParseConfig(integrationPool.Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolConfig.ConnConfig.RuntimeParams["search_path"] = `"` + schemaName + `"`
+	customPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer customPool.Close()
+	if err := ValidateSchema(ctx, customPool, schemaName); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := customPool.Exec(ctx, `
+INSERT INTO artist (id, created_at, last_modified_at, name)
+VALUES (9001, now(), now(), 'Custom Schema Artist')`); err != nil {
+		t.Fatal(err)
+	}
+	page, err := New(customPool, testPublicURL, testQueryTimeout).SearchArtists(
+		ctx,
+		catalog.ArtistFilter{Name: "custom schema"},
+		catalog.PageRequest{Size: 20},
+	)
+	assertPage(t, page, 1, false, err)
+	if page.Items[0].ID != 9001 {
+		t.Fatalf("custom schema artist=%+v", page.Items[0])
+	}
+}
+
+func testSchemaUsageDenied(t *testing.T, ctx context.Context) {
+	t.Helper()
+	const (
+		roleName   = "api_no_schema_usage"
+		schemaName = "api_private"
+		password   = "schema-test-password"
+	)
+	for _, statement := range []string{
+		"DROP SCHEMA IF EXISTS " + schemaName + " CASCADE",
+		"DROP ROLE IF EXISTS " + roleName,
+		"CREATE ROLE " + roleName + " LOGIN PASSWORD '" + password + "'",
+		"CREATE SCHEMA " + schemaName,
+		"REVOKE ALL ON SCHEMA " + schemaName + " FROM PUBLIC",
+	} {
+		if _, err := integrationPool.Exec(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	poolConfig, err := pgxpool.ParseConfig(integrationPool.Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolConfig.ConnConfig.User = roleName
+	poolConfig.ConnConfig.Password = password
+	restrictedPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSchema(ctx, restrictedPool, schemaName); err == nil || !strings.Contains(err.Error(), "requires USAGE") {
+		restrictedPool.Close()
+		t.Fatalf("schema usage error=%v", err)
+	}
+	restrictedPool.Close()
+	if _, err := integrationPool.Exec(ctx, "DROP SCHEMA "+schemaName+" CASCADE"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integrationPool.Exec(ctx, "DROP ROLE "+roleName); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testTableSelectDenied(t *testing.T, ctx context.Context) {
+	t.Helper()
+	const (
+		roleName = "api_no_table_select"
+		password = "table-test-password"
+	)
+	for _, statement := range []string{
+		"DROP ROLE IF EXISTS " + roleName,
+		"CREATE ROLE " + roleName + " LOGIN PASSWORD '" + password + "'",
+		"GRANT USAGE ON SCHEMA public TO " + roleName,
+	} {
+		if _, err := integrationPool.Exec(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	poolConfig, err := pgxpool.ParseConfig(integrationPool.Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolConfig.ConnConfig.User = roleName
+	poolConfig.ConnConfig.Password = password
+	restrictedPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSchema(ctx, restrictedPool, "public"); err == nil || !strings.Contains(err.Error(), "requires SELECT") {
+		restrictedPool.Close()
+		t.Fatalf("table SELECT error=%v", err)
+	}
+	restrictedPool.Close()
+	if _, err := integrationPool.Exec(ctx, "REVOKE USAGE ON SCHEMA public FROM "+roleName); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integrationPool.Exec(ctx, "DROP ROLE "+roleName); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDetailDecodersRejectMalformedJSON(t *testing.T) {
 	invalid := []byte("not-json")
 	emptyArray := []byte("[]")
@@ -258,8 +429,29 @@ func intPointer(value int) *int { return &value }
 func boolPointer(value bool) *bool { return &value }
 
 func prepareDatabase(ctx context.Context, pool *pgxpool.Pool) error {
+	if err := ensureCanonicalTestSchema(ctx, pool); err != nil {
+		return err
+	}
+	if _, err := pool.Exec(ctx, resetSQL); err != nil {
+		return fmt.Errorf("reset integration data: %w", err)
+	}
+	if _, err := pool.Exec(ctx, seedSQL); err != nil {
+		return fmt.Errorf("seed integration data: %w", err)
+	}
+	return nil
+}
+
+func ensureCanonicalTestSchema(ctx context.Context, pool *pgxpool.Pool) error {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin schema migration transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", testSchemaMigrationLockID); err != nil {
+		return fmt.Errorf("lock schema migrations: %w", err)
+	}
 	var schemaExists bool
-	if err := pool.QueryRow(ctx, "SELECT to_regclass('public.artist') IS NOT NULL").Scan(&schemaExists); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT to_regclass('public.artist') IS NOT NULL").Scan(&schemaExists); err != nil {
 		return err
 	}
 	if !schemaExists {
@@ -276,16 +468,13 @@ func prepareDatabase(ctx context.Context, pool *pgxpool.Pool) error {
 			if err != nil {
 				return err
 			}
-			if _, err := pool.Exec(ctx, string(migration)); err != nil {
+			if _, err := tx.Exec(ctx, string(migration)); err != nil {
 				return fmt.Errorf("apply %s: %w", file.Name(), err)
 			}
 		}
 	}
-	if _, err := pool.Exec(ctx, resetSQL); err != nil {
-		return fmt.Errorf("reset integration data: %w", err)
-	}
-	if _, err := pool.Exec(ctx, seedSQL); err != nil {
-		return fmt.Errorf("seed integration data: %w", err)
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit schema migrations: %w", err)
 	}
 	return nil
 }

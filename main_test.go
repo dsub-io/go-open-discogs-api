@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"runtime"
@@ -16,12 +17,15 @@ import (
 	"time"
 
 	"github.com/dsub-io/go-open-discogs-api/internal/buildinfo"
+	canonicalschema "github.com/dsub-io/open-discogs-model/schema"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
-	envTestDatabaseURL     = "TEST_DATABASE_URL"
-	defaultTestDatabaseURL = "postgres://discogs:discogs@127.0.0.1:55432/discogs?sslmode=disable"
-	testListenerMessage    = "HTTP listener started"
+	envTestDatabaseURL              = "TEST_DATABASE_URL"
+	defaultTestDatabaseURL          = "postgres://discogs:discogs@127.0.0.1:55432/discogs?sslmode=disable"
+	testListenerMessage             = "HTTP listener started"
+	testSchemaMigrationLockID int64 = 7_803_151_124
 )
 
 var (
@@ -79,6 +83,7 @@ func TestRunAppliesLimitsAndStopsOnSignal(t *testing.T) {
 	if databaseURL == "" {
 		databaseURL = defaultTestDatabaseURL
 	}
+	ensureMainDatabase(t, databaseURL)
 	previousProcs := runtime.GOMAXPROCS(0)
 	defer runtime.GOMAXPROCS(previousProcs)
 	previousMemoryLimit := debug.SetMemoryLimit(math.MaxInt64)
@@ -111,6 +116,54 @@ func TestRunAppliesLimitsAndStopsOnSignal(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("application did not stop")
+	}
+}
+
+func ensureMainDatabase(t *testing.T, databaseURL string) {
+	t.Helper()
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", testSchemaMigrationLockID); err != nil {
+		t.Fatal(err)
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, "SELECT to_regclass('public.artist') IS NOT NULL").Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	migrations, err := canonicalschema.Migrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := fs.ReadDir(migrations, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		migration, readErr := fs.ReadFile(migrations, file.Name())
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if _, err := tx.Exec(ctx, string(migration)); err != nil {
+			t.Fatalf("apply %s: %v", file.Name(), err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
 	}
 }
 
