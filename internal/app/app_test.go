@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -15,12 +16,14 @@ import (
 
 	"github.com/dsub-io/go-open-discogs-api/internal/config"
 	"github.com/dsub-io/go-open-discogs-api/internal/telemetry"
+	canonicalschema "github.com/dsub-io/open-discogs-model/schema"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
-	envTestDatabaseURL     = "TEST_DATABASE_URL"
-	defaultTestDatabaseURL = "postgres://discogs:discogs@127.0.0.1:55432/discogs?sslmode=disable"
+	envTestDatabaseURL              = "TEST_DATABASE_URL"
+	defaultTestDatabaseURL          = "postgres://discogs:discogs@127.0.0.1:55432/discogs?sslmode=disable"
+	testSchemaMigrationLockID int64 = 7_803_151_124
 )
 
 func TestRunStartsAndStopsBothListeners(t *testing.T) {
@@ -28,6 +31,7 @@ func TestRunStartsAndStopsBothListeners(t *testing.T) {
 	if databaseURL == "" {
 		databaseURL = defaultTestDatabaseURL
 	}
+	ensureAppDatabase(t, databaseURL)
 	output := newSignalWriter(logMessageListening)
 	logger := slog.New(slog.NewJSONHandler(output, nil))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -53,6 +57,17 @@ func TestRunStartsAndStopsBothListeners(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), logMessageShutdown) {
 		t.Fatalf("shutdown log missing: %s", output.String())
+	}
+	if !strings.Contains(output.String(), publicSchemaWarning) {
+		t.Fatalf("public schema warning missing: %s", output.String())
+	}
+	if !strings.Contains(output.String(), `"level":"WARN"`) {
+		t.Fatalf("public schema warning has wrong level: %s", output.String())
+	}
+	missingSchemaConfig := testConfig(databaseURL)
+	missingSchemaConfig.Database.Schema = "missing_schema"
+	if err := Run(context.Background(), missingSchemaConfig, logger); err == nil || !strings.Contains(err.Error(), "validate PostgreSQL schema") {
+		t.Fatalf("missing schema error=%v", err)
 	}
 }
 
@@ -96,7 +111,9 @@ func TestDatabaseAndServerConfiguration(t *testing.T) {
 	if poolConfig.MaxConns != cfg.Database.MaxConnections || poolConfig.MinConns != cfg.Database.MinConnections || poolConfig.ConnConfig.StatementCacheCapacity != cfg.Database.StatementCacheSize {
 		t.Fatalf("pool config=%+v", poolConfig)
 	}
-	if poolConfig.ConnConfig.RuntimeParams[connectionParameterName] != databaseApplicationName || poolConfig.ConnConfig.Tracer != nil {
+	if poolConfig.ConnConfig.RuntimeParams[connectionParameterName] != databaseApplicationName ||
+		poolConfig.ConnConfig.RuntimeParams[databaseSearchPathName] != `"public"` ||
+		poolConfig.ConnConfig.Tracer != nil {
 		t.Fatalf("connection config=%+v", poolConfig.ConnConfig)
 	}
 
@@ -180,9 +197,58 @@ func testConfig(databaseURL string) config.Config {
 		CacheControl: "no-store", ReadHeaderTimeout: time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second,
 		IdleTimeout: time.Second, ShutdownTimeout: time.Second, QueryTimeout: time.Second, MetricsEnabled: true,
 		Database: config.Database{
-			URL: databaseURL, MaxConnections: 2, MinConnections: 0, MaxConnectionIdle: time.Minute,
+			URL: databaseURL, Schema: config.DefaultDatabaseSchema,
+			MaxConnections: 2, MinConnections: 0, MaxConnectionIdle: time.Minute,
 			MaxConnectionLife: time.Minute, HealthCheckPeriod: time.Minute, StatementCacheSize: 16,
 		},
+	}
+}
+
+func ensureAppDatabase(t *testing.T, databaseURL string) {
+	t.Helper()
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", testSchemaMigrationLockID); err != nil {
+		t.Fatal(err)
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, "SELECT to_regclass('public.artist') IS NOT NULL").Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	if exists {
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	migrations, err := canonicalschema.Migrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := fs.ReadDir(migrations, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		migration, readErr := fs.ReadFile(migrations, file.Name())
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if _, err := tx.Exec(ctx, string(migration)); err != nil {
+			t.Fatalf("apply %s: %v", file.Name(), err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
 	}
 }
 

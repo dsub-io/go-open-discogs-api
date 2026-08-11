@@ -7,6 +7,7 @@ data:
   API_ADDRESS: ":8080"
   API_MANAGEMENT_ADDRESS: ":8081"
   API_SERVER_URL: "https://discogs.example.com"
+  API_DATABASE_SCHEMA: "open_discogs"
   API_MAX_PROCS: "2"
   API_MEMORY_LIMIT_MIB: "384"
   API_DB_MAX_CONNS: "4"

@@ -27,8 +27,10 @@ const (
 	serverRolePublic         = "public"
 	serverRoleManagement     = "management"
 	connectionParameterName  = "application_name"
+	databaseSearchPathName   = "search_path"
 	serverErrorBufferSize    = 2
 	databaseConnectionPrefix = "configure PostgreSQL"
+	publicSchemaWarning      = "database schema is public; set --database-schema or API_DATABASE_SCHEMA to isolate OpenDiscogs tables"
 )
 
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
@@ -38,6 +40,9 @@ func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 type poolFactory func(context.Context, *pgxpool.Config) (*pgxpool.Pool, error)
 
 func run(ctx context.Context, cfg config.Config, logger *slog.Logger, newPool poolFactory) error {
+	if cfg.Database.Schema == config.DefaultDatabaseSchema {
+		logger.Warn(publicSchemaWarning, "schema", cfg.Database.Schema)
+	}
 	telemetryRuntime, err := telemetry.Setup(ctx, cfg.Tracing, logger)
 	if err != nil {
 		return fmt.Errorf("configure telemetry: %w", err)
@@ -59,6 +64,12 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger, newPool po
 	cancelPing()
 	if err != nil {
 		return fmt.Errorf("connect to PostgreSQL: %w", err)
+	}
+	schemaContext, cancelSchema := context.WithTimeout(ctx, cfg.QueryTimeout)
+	err = postgres.ValidateSchema(schemaContext, pool, cfg.Database.Schema)
+	cancelSchema()
+	if err != nil {
+		return fmt.Errorf("validate PostgreSQL schema: %w", err)
 	}
 
 	registry := prometheus.NewRegistry()
@@ -100,6 +111,7 @@ func databaseConfig(cfg config.Config, telemetryRuntime telemetry.Runtime) (*pgx
 	poolConfig.HealthCheckPeriod = cfg.Database.HealthCheckPeriod
 	poolConfig.ConnConfig.StatementCacheCapacity = cfg.Database.StatementCacheSize
 	poolConfig.ConnConfig.RuntimeParams[connectionParameterName] = databaseApplicationName
+	poolConfig.ConnConfig.RuntimeParams[databaseSearchPathName] = `"` + cfg.Database.Schema + `"`
 	if queryTracer := telemetryRuntime.QueryTracer(); queryTracer != nil {
 		poolConfig.ConnConfig.Tracer = queryTracer
 	}

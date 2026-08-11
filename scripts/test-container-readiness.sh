@@ -136,6 +136,12 @@ if [ "$ready" = false ]; then
   exit 1
 fi
 
+model_directory="$(go list -m -f '{{.Dir}}' github.com/dsub-io/open-discogs-model)"
+for migration in "$model_directory"/schema/migrations/*.sql; do
+  docker exec --interactive "$database_container" \
+    psql --set ON_ERROR_STOP=1 --username discogs --dbname discogs < "$migration" >/dev/null
+done
+
 docker run \
   --detach \
   --name "$api_container" \
