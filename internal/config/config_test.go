@@ -137,6 +137,7 @@ func TestLoadRejectsInvalidInput(t *testing.T) {
 		{"memory overflow", validEnvironment(), []string{"--memory-limit-mib=8796093022208"}, "too large"},
 		{"max conns low", validEnvironment(), []string{"--db-max-conns=0"}, FlagDatabaseMaxConns},
 		{"max conns high", validEnvironment(), []string{"--db-max-conns=1025"}, FlagDatabaseMaxConns},
+		{"max conns int32 overflow", validEnvironment(), []string{"--db-max-conns=2147483648"}, FlagDatabaseMaxConns},
 		{"min conns low", validEnvironment(), []string{"--db-min-conns=-1"}, FlagDatabaseMinConns},
 		{"min conns high", validEnvironment(), []string{"--db-max-conns=2", "--db-min-conns=3"}, FlagDatabaseMinConns},
 		{"statement low", validEnvironment(), []string{"--db-statement-cache=-1"}, FlagStatementCache},

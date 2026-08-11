@@ -181,8 +181,8 @@ type rawValues struct {
 	databasePassword  string
 	databaseName      string
 	databaseSSLMode   string
-	databaseMaxConns  int
-	databaseMinConns  int
+	databaseMaxConns  int64
+	databaseMinConns  int64
 	statementCache    int
 	metricsEnabled    bool
 	tracingEnabled    bool
@@ -272,8 +272,8 @@ func bindFlags(flags *flag.FlagSet, values *rawValues) {
 	flags.StringVar(&values.databasePassword, FlagDatabasePassword, values.databasePassword, description(FlagDatabasePassword))
 	flags.StringVar(&values.databaseName, FlagDatabaseName, values.databaseName, description(FlagDatabaseName))
 	flags.StringVar(&values.databaseSSLMode, FlagDatabaseSSLMode, values.databaseSSLMode, description(FlagDatabaseSSLMode))
-	flags.IntVar(&values.databaseMaxConns, FlagDatabaseMaxConns, values.databaseMaxConns, description(FlagDatabaseMaxConns))
-	flags.IntVar(&values.databaseMinConns, FlagDatabaseMinConns, values.databaseMinConns, description(FlagDatabaseMinConns))
+	flags.Int64Var(&values.databaseMaxConns, FlagDatabaseMaxConns, values.databaseMaxConns, description(FlagDatabaseMaxConns))
+	flags.Int64Var(&values.databaseMinConns, FlagDatabaseMinConns, values.databaseMinConns, description(FlagDatabaseMinConns))
 	flags.IntVar(&values.statementCache, FlagStatementCache, values.statementCache, description(FlagStatementCache))
 	flags.BoolVar(&values.metricsEnabled, FlagMetricsEnabled, values.metricsEnabled, description(FlagMetricsEnabled))
 	flags.BoolVar(&values.tracingEnabled, FlagTracingEnabled, values.tracingEnabled, description(FlagTracingEnabled))
@@ -312,10 +312,10 @@ func environmentValues(lookup LookupEnv) (rawValues, error) {
 	if values.shutdownTimeout, err = environmentDuration(lookup, EnvShutdownTimeout, DefaultShutdownTimeout); err != nil {
 		return rawValues{}, err
 	}
-	if values.databaseMaxConns, err = environmentInt(lookup, EnvDatabaseMaxConns, DefaultDatabaseMaxConns); err != nil {
+	if values.databaseMaxConns, err = environmentInt64(lookup, EnvDatabaseMaxConns, DefaultDatabaseMaxConns); err != nil {
 		return rawValues{}, err
 	}
-	if values.databaseMinConns, err = environmentInt(lookup, EnvDatabaseMinConns, DefaultDatabaseMinConns); err != nil {
+	if values.databaseMinConns, err = environmentInt64(lookup, EnvDatabaseMinConns, DefaultDatabaseMinConns); err != nil {
 		return rawValues{}, err
 	}
 	if values.statementCache, err = environmentInt(lookup, EnvStatementCache, DefaultStatementCacheSize); err != nil {
@@ -367,6 +367,13 @@ func validate(values rawValues) (Config, error) {
 	}
 	if int64(values.memoryLimitMiB) > math.MaxInt64>>20 {
 		return Config{}, fmt.Errorf("%s is too large to represent in bytes", FlagMemoryLimitMiB)
+	}
+	if values.databaseMaxConns > math.MaxInt32 || values.databaseMinConns > math.MaxInt32 {
+		return Config{}, fmt.Errorf(
+			"%s and %s must fit signed 32-bit PostgreSQL connection counts",
+			FlagDatabaseMaxConns,
+			FlagDatabaseMinConns,
+		)
 	}
 	if values.databaseMaxConns < 1 || values.databaseMaxConns > MaximumConnections {
 		return Config{}, fmt.Errorf("%s must be between 1 and %d", FlagDatabaseMaxConns, MaximumConnections)
@@ -472,6 +479,18 @@ func environmentInt(lookup LookupEnv, name string, fallback int) (int, error) {
 		return fallback, nil
 	}
 	parsed, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer", name)
+	}
+	return parsed, nil
+}
+
+func environmentInt64(lookup LookupEnv, name string, fallback int64) (int64, error) {
+	raw := strings.TrimSpace(value(lookup, name, ""))
+	if raw == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("%s must be an integer", name)
 	}
