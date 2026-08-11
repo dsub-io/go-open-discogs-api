@@ -82,6 +82,10 @@ func TestLoadControlArgumentsDoNotReadEnvironment(t *testing.T) {
 	if err != nil || !result.ShowVersion {
 		t.Fatalf("version result=%+v err=%v", result, err)
 	}
+	result, err = Load([]string{"--healthcheck"}, badEnvironment, &bytes.Buffer{})
+	if err != nil || !result.CheckReadiness {
+		t.Fatalf("healthcheck result=%+v err=%v", result, err)
+	}
 	var output bytes.Buffer
 	_, err = Load([]string{"--help"}, badEnvironment, &output)
 	if !errors.Is(err, flag.ErrHelp) || !strings.Contains(output.String(), "-"+FlagDatabaseURL) {

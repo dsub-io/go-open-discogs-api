@@ -106,3 +106,5 @@ jobs:
         run: go run sigs.k8s.io/kustomize/kustomize/v5@v5.8.1 build deploy/kubernetes >/dev/null
       - name: Build container
         run: docker build --build-arg VERSION=ci -t go-open-discogs-api:ci .
+      - name: Test container readiness
+        run: scripts/test-container-readiness.sh go-open-discogs-api:ci

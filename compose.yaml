@@ -24,7 +24,7 @@ services:
       API_METRICS_ENABLED: "${API_METRICS_ENABLED:-true}"
       API_TRACING_ENABLED: "${API_TRACING_ENABLED:-false}"
     healthcheck:
-      test: ["CMD", "/go-open-discogs-api", "--version"]
+      test: ["CMD", "/go-open-discogs-api", "--healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3

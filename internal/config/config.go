@@ -39,6 +39,7 @@ const (
 	FlagTracingEnabled    = "tracing-enabled"
 	FlagOTLPEndpoint      = "otlp-endpoint"
 	FlagTraceSampleRatio  = "trace-sample-ratio"
+	FlagHealthcheck       = "healthcheck"
 	FlagVersion           = "version"
 
 	EnvAddress           = "API_ADDRESS"
@@ -115,8 +116,9 @@ type Definition struct {
 }
 
 type Result struct {
-	Config      Config
-	ShowVersion bool
+	Config         Config
+	CheckReadiness bool
+	ShowVersion    bool
 }
 
 type Config struct {
@@ -184,6 +186,9 @@ type rawValues struct {
 func Load(arguments []string, lookup LookupEnv, output io.Writer) (Result, error) {
 	if hasArgument(arguments, "--"+FlagVersion, "-"+FlagVersion) {
 		return Result{ShowVersion: true}, nil
+	}
+	if hasArgument(arguments, "--"+FlagHealthcheck, "-"+FlagHealthcheck) {
+		return Result{CheckReadiness: true}, nil
 	}
 	if hasArgument(arguments, "--help", "-help", "-h") {
 		values, _ := environmentValues(emptyLookup)
@@ -265,6 +270,7 @@ func bindFlags(flags *flag.FlagSet, values *rawValues) {
 	flags.BoolVar(&values.tracingEnabled, FlagTracingEnabled, values.tracingEnabled, description(FlagTracingEnabled))
 	flags.StringVar(&values.otlpEndpoint, FlagOTLPEndpoint, values.otlpEndpoint, description(FlagOTLPEndpoint))
 	flags.Float64Var(&values.traceSampleRatio, FlagTraceSampleRatio, values.traceSampleRatio, description(FlagTraceSampleRatio))
+	flags.Bool(FlagHealthcheck, false, "Probe management readiness and exit.")
 	flags.Bool(FlagVersion, false, "Print version and exit.")
 }
 
