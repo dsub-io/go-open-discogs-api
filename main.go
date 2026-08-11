@@ -12,10 +12,12 @@ import (
 	"runtime"
 	"runtime/debug"
 	"syscall"
+	"time"
 
 	"github.com/dsub-io/go-open-discogs-api/internal/app"
 	"github.com/dsub-io/go-open-discogs-api/internal/buildinfo"
 	"github.com/dsub-io/go-open-discogs-api/internal/config"
+	"github.com/dsub-io/go-open-discogs-api/internal/healthcheck"
 )
 
 const (
@@ -23,9 +25,11 @@ const (
 	logFieldVersion    = "version"
 	logFieldMaxProcs   = "gomaxprocs"
 	logFieldDBMaxConns = "db_max_connections"
+	readinessTimeout   = 2 * time.Second
 )
 
 type exitProcess func(int)
+type readinessProbe func(context.Context) error
 
 func main() {
 	mainWithExit(os.Args[1:], os.LookupEnv, os.Stdout, os.Stderr, os.Exit)
@@ -39,6 +43,15 @@ func mainWithExit(arguments []string, lookup config.LookupEnv, stdout, stderr io
 }
 
 func run(arguments []string, lookup config.LookupEnv, stdout, stderr io.Writer) error {
+	return runWithReadinessProbe(arguments, lookup, stdout, stderr, healthcheck.Readiness)
+}
+
+func runWithReadinessProbe(
+	arguments []string,
+	lookup config.LookupEnv,
+	stdout, stderr io.Writer,
+	probe readinessProbe,
+) error {
 	result, err := config.Load(arguments, lookup, stderr)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -49,6 +62,11 @@ func run(arguments []string, lookup config.LookupEnv, stdout, stderr io.Writer) 
 	if result.ShowVersion {
 		_, err := fmt.Fprintln(stdout, buildinfo.Version)
 		return err
+	}
+	if result.CheckReadiness {
+		ctx, cancel := context.WithTimeout(context.Background(), readinessTimeout)
+		defer cancel()
+		return probe(ctx)
 	}
 	cfg := result.Config
 	if cfg.MaxProcs > 0 {
