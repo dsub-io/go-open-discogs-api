@@ -54,29 +54,45 @@ func TestMain(main *testing.M) {
 func TestStoreSearchAndRelatedQueries(t *testing.T) {
 	t.Parallel()
 	store := New(integrationPool, testPublicURL+"/", testQueryTimeout)
-	request := catalog.PageRequest{Page: 1, Size: 20, Sort: []catalog.Sort{{Field: catalog.FieldID, Direction: catalog.Ascending}}}
+	request := catalog.PageRequest{Size: 20}
 
-	artists, err := store.SearchArtists(context.Background(), catalog.ArtistFilter{Name: "alpha", RealName: "real", Profile: "profile"}, request)
-	assertPage(t, artists.Total, len(artists.Items), err)
-	artists, err = store.SearchArtists(context.Background(), catalog.ArtistFilter{Name: "alpha", RealName: "real", Profile: "profile"}, request)
-	assertPage(t, artists.Total, len(artists.Items), err)
+	artists, err := store.SearchArtists(context.Background(), catalog.ArtistFilter{Name: "alpha", RealName: "real"}, request)
+	assertPage(t, artists, 1, false, err)
+	artists, err = store.SearchArtists(context.Background(), catalog.ArtistFilter{Name: "alpha", RealName: "real"}, request)
+	assertPage(t, artists, 1, false, err)
 
-	labels, err := store.SearchLabels(context.Background(), catalog.LabelFilter{ContactInfo: "contact", DataQuality: "correct", Name: "label", Profile: "profile"}, request)
-	assertPage(t, labels.Total, len(labels.Items), err)
+	labels, err := store.SearchLabels(context.Background(), catalog.LabelFilter{Name: "alpha"}, request)
+	assertPage(t, labels, 1, false, err)
 	masters, err := store.SearchMasters(context.Background(), catalog.MasterFilter{Title: "master", Year: intPointer(2000)}, request)
-	assertPage(t, masters.Total, len(masters.Items), err)
+	assertPage(t, masters, 1, false, err)
 	releases, err := store.SearchReleases(context.Background(), catalog.ReleaseFilter{Title: "release", Country: "us", Year: intPointer(2000), Month: intPointer(2), Master: boolPointer(true)}, request)
-	assertPage(t, releases.Total, len(releases.Items), err)
+	assertPage(t, releases, 1, false, err)
 
 	artistReleases, err := store.ArtistReleases(context.Background(), 1, request)
-	assertPage(t, artistReleases.Total, len(artistReleases.Items), err)
+	assertPage(t, artistReleases, 1, false, err)
 	if artistReleases.Items[0].ResourceURL != testPublicURL+"/releases/1" {
 		t.Fatalf("artist resource URL=%s", artistReleases.Items[0].ResourceURL)
 	}
 	labelReleases, err := store.LabelReleases(context.Background(), 1, request)
-	assertPage(t, labelReleases.Total, len(labelReleases.Items), err)
+	assertPage(t, labelReleases, 1, false, err)
 	masterReleases, err := store.MasterReleases(context.Background(), 1, request)
-	assertPage(t, masterReleases.Total, len(masterReleases.Items), err)
+	assertPage(t, masterReleases, 1, false, err)
+
+	first, err := store.SearchArtists(context.Background(), catalog.ArtistFilter{}, catalog.PageRequest{Size: 1})
+	assertPage(t, first, 1, true, err)
+	next := first.NextAfterID()
+	if next == nil || *next != 1 {
+		t.Fatalf("first cursor=%v", next)
+	}
+	second, err := store.SearchArtists(
+		context.Background(),
+		catalog.ArtistFilter{},
+		catalog.PageRequest{AfterID: *next, Size: 1},
+	)
+	assertPage(t, second, 1, true, err)
+	if second.Items[0].ID != 2 {
+		t.Fatalf("second page=%+v", second)
+	}
 }
 
 func TestStoreDetailQueries(t *testing.T) {
@@ -122,24 +138,13 @@ func TestStoreNotFoundAndCancellation(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := store.SearchArtists(ctx, catalog.ArtistFilter{}, catalog.PageRequest{Page: 1, Size: 1}); err == nil {
+	if _, err := store.SearchArtists(ctx, catalog.ArtistFilter{}, catalog.PageRequest{Size: 1}); err == nil {
 		t.Fatal("canceled search succeeded")
 	}
 }
 
 func TestStoreHelpers(t *testing.T) {
 	t.Parallel()
-	request := catalog.PageRequest{Sort: []catalog.Sort{
-		{Field: catalog.FieldTitle, Direction: catalog.Descending},
-		{Field: "unsupported", Direction: catalog.Ascending},
-	}}
-	ordered := orderBy(request, map[string]string{catalog.FieldTitle: "r.title"}, "r.id")
-	if ordered != " ORDER BY r.title DESC, r.id ASC" {
-		t.Fatalf("order=%s", ordered)
-	}
-	if orderBy(catalog.PageRequest{}, map[string]string{}, "r.id") != " ORDER BY r.id ASC" {
-		t.Fatal("default ordering changed")
-	}
 	if notFound(errRepositoryTest) != errRepositoryTest || !errors.Is(notFound(pgx.ErrNoRows), catalog.ErrNotFound) {
 		t.Fatal("notFound mapping changed")
 	}
@@ -155,49 +160,17 @@ func TestStoreHelpers(t *testing.T) {
 		t.Fatal("year-month parameters changed")
 	}
 
-	cache := newCountCache(time.Hour, 1)
-	if _, ok := cache.Get("missing"); ok {
-		t.Fatal("missing cache entry found")
-	}
-	cache.Put("first", 1)
-	cache.Put("second", 2)
-	if value, ok := cache.Get("second"); !ok || value != 2 {
-		t.Fatalf("cache value=%d ok=%t", value, ok)
-	}
-	expired := newCountCache(-time.Second, 1)
-	expired.Put("expired", 1)
-	if _, ok := expired.Get("expired"); ok {
-		t.Fatal("expired cache entry found")
-	}
-	partiallyExpired := newCountCache(time.Hour, 2)
-	partiallyExpired.values["expired"] = countEntry{value: 1, expiresAt: time.Now().Add(-time.Second)}
-	partiallyExpired.values["active"] = countEntry{value: 2, expiresAt: time.Now().Add(time.Hour)}
-	partiallyExpired.Put("replacement", 3)
-	if _, exists := partiallyExpired.values["expired"]; exists {
-		t.Fatal("Put retained expired entry")
-	}
-
-	store := &Store{counts: newCountCache(time.Hour, 1)}
-	page, err := loadPage(context.Background(), store, "key",
-		func(context.Context) ([]catalog.Artist, error) { return []catalog.Artist{{ID: 1}}, nil },
-		func(context.Context) (int64, error) { return 1, nil },
+	page, err := loadPage(context.Background(), 1,
+		func(context.Context) ([]catalog.Artist, error) { return []catalog.Artist{{ID: 1}, {ID: 2}}, nil },
 	)
-	if err != nil || page.Total != 1 || len(page.Items) != 1 {
+	if err != nil || !page.HasMore || len(page.Items) != 1 {
 		t.Fatalf("page=%+v err=%v", page, err)
 	}
-	_, err = loadPage(context.Background(), store, "cached",
+	_, err = loadPage(context.Background(), 1,
 		func(context.Context) ([]catalog.Artist, error) { return nil, errRepositoryTest },
-		func(context.Context) (int64, error) { return 1, nil },
 	)
 	if !errors.Is(err, errRepositoryTest) {
 		t.Fatalf("item loader error=%v", err)
-	}
-	_, err = loadPage(context.Background(), store, "count-error",
-		func(context.Context) ([]catalog.Artist, error) { return nil, nil },
-		func(context.Context) (int64, error) { return 0, errRepositoryTest },
-	)
-	if !errors.Is(err, errRepositoryTest) {
-		t.Fatalf("count loader error=%v", err)
 	}
 
 	rows, err := integrationPool.Query(context.Background(), "SELECT 1::bigint")
@@ -220,7 +193,7 @@ func TestStoreQueryErrorsFromClosedPool(t *testing.T) {
 	}
 	pool.Close()
 	store := New(pool, testPublicURL, testQueryTimeout)
-	request := catalog.PageRequest{Page: 1, Size: 1, Sort: []catalog.Sort{{Field: catalog.FieldID, Direction: catalog.Ascending}}}
+	request := catalog.PageRequest{Size: 1}
 	tests := []struct {
 		name string
 		run  func() error
@@ -273,10 +246,10 @@ func TestDetailDecodersRejectMalformedJSON(t *testing.T) {
 
 var errRepositoryTest = errors.New("test repository failure")
 
-func assertPage(t *testing.T, total int64, itemCount int, err error) {
+func assertPage[T catalog.PageItem](t *testing.T, page catalog.Page[T], itemCount int, hasMore bool, err error) {
 	t.Helper()
-	if err != nil || total != 1 || itemCount != 1 {
-		t.Fatalf("total=%d items=%d err=%v", total, itemCount, err)
+	if err != nil || len(page.Items) != itemCount || page.HasMore != hasMore {
+		t.Fatalf("page=%+v err=%v", page, err)
 	}
 }
 

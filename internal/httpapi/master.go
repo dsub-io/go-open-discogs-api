@@ -17,9 +17,12 @@ func NewMasterHandler(reader catalog.MasterReader, responder *Responder) *Master
 }
 
 func (h *MasterHandler) Search(writer http.ResponseWriter, request *http.Request) {
-	pageRequest, err := parsePage(request.URL.Query(), sortFields(
-		catalog.FieldID, catalog.FieldTitle, catalog.FieldReleasedYear,
-	), defaultIDSort())
+	pageRequest, err := parseCursorPage(request.URL.Query())
+	if err != nil {
+		h.responder.BadRequest(writer, request, err)
+		return
+	}
+	title, err := optionalSearchTerm(request.URL.Query().Get(ParameterTitle), ParameterTitle)
 	if err != nil {
 		h.responder.BadRequest(writer, request, err)
 		return
@@ -30,13 +33,13 @@ func (h *MasterHandler) Search(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	page, err := h.reader.SearchMasters(request.Context(), catalog.MasterFilter{
-		Title: request.URL.Query().Get(ParameterTitle), Year: year,
+		Title: title, Year: year,
 	}, pageRequest)
 	if err != nil {
 		h.responder.RepositoryError(writer, request, err)
 		return
 	}
-	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, pageRequest, request.URL.Path))
+	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, request.URL.Path))
 }
 
 func (h *MasterHandler) Get(writer http.ResponseWriter, request *http.Request) {
@@ -59,7 +62,7 @@ func (h *MasterHandler) Releases(writer http.ResponseWriter, request *http.Reque
 		h.responder.BadRequest(writer, request, err)
 		return
 	}
-	pageRequest, err := parsePage(request.URL.Query(), sortFields(catalog.FieldID, catalog.FieldTitle, catalog.FieldYear), defaultIDSort())
+	pageRequest, err := parseCursorPage(request.URL.Query())
 	if err != nil {
 		h.responder.BadRequest(writer, request, err)
 		return
@@ -69,5 +72,5 @@ func (h *MasterHandler) Releases(writer http.ResponseWriter, request *http.Reque
 		h.responder.RepositoryError(writer, request, err)
 		return
 	}
-	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, pageRequest, request.URL.Path))
+	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, request.URL.Path))
 }

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"errors"
 	"math"
 	"net/http"
 
@@ -17,9 +18,17 @@ func NewReleaseHandler(reader catalog.ReleaseReader, responder *Responder) *Rele
 }
 
 func (h *ReleaseHandler) Search(writer http.ResponseWriter, request *http.Request) {
-	pageRequest, err := parsePage(request.URL.Query(), sortFields(
-		catalog.FieldID, catalog.FieldTitle, catalog.FieldCountry, catalog.FieldReleasedYear, catalog.FieldReleasedMonth,
-	), defaultIDSort())
+	pageRequest, err := parseCursorPage(request.URL.Query())
+	if err != nil {
+		h.responder.BadRequest(writer, request, err)
+		return
+	}
+	title, err := optionalSearchTerm(request.URL.Query().Get(ParameterTitle), ParameterTitle)
+	if err != nil {
+		h.responder.BadRequest(writer, request, err)
+		return
+	}
+	country, err := optionalCountry(request.URL.Query().Get(ParameterCountry))
 	if err != nil {
 		h.responder.BadRequest(writer, request, err)
 		return
@@ -34,20 +43,24 @@ func (h *ReleaseHandler) Search(writer http.ResponseWriter, request *http.Reques
 		h.responder.BadRequest(writer, request, err)
 		return
 	}
+	if month != nil && year == nil {
+		h.responder.BadRequest(writer, request, errors.New(errorMonthRequiresYear))
+		return
+	}
 	master, err := optionalBool(request.URL.Query().Get(ParameterMaster), ParameterMaster)
 	if err != nil {
 		h.responder.BadRequest(writer, request, err)
 		return
 	}
 	page, err := h.reader.SearchReleases(request.Context(), catalog.ReleaseFilter{
-		Title: request.URL.Query().Get(ParameterTitle), Country: request.URL.Query().Get(ParameterCountry),
+		Title: title, Country: country,
 		Year: year, Month: month, Master: master,
 	}, pageRequest)
 	if err != nil {
 		h.responder.RepositoryError(writer, request, err)
 		return
 	}
-	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, pageRequest, request.URL.Path))
+	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, request.URL.Path))
 }
 
 func (h *ReleaseHandler) Get(writer http.ResponseWriter, request *http.Request) {

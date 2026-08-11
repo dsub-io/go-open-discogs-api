@@ -16,22 +16,29 @@ func NewArtistHandler(reader catalog.ArtistReader, responder *Responder) *Artist
 }
 
 func (h *ArtistHandler) Search(writer http.ResponseWriter, request *http.Request) {
-	pageRequest, err := parsePage(request.URL.Query(), sortFields(
-		catalog.FieldID, catalog.FieldName, catalog.FieldRealName, catalog.FieldProfile,
-	), defaultIDSort())
+	pageRequest, err := parseCursorPage(request.URL.Query())
+	if err != nil {
+		h.responder.BadRequest(writer, request, err)
+		return
+	}
+	name, err := optionalSearchTerm(request.URL.Query().Get(ParameterName), ParameterName)
+	if err != nil {
+		h.responder.BadRequest(writer, request, err)
+		return
+	}
+	realName, err := optionalSearchTerm(request.URL.Query().Get(ParameterRealName), ParameterRealName)
 	if err != nil {
 		h.responder.BadRequest(writer, request, err)
 		return
 	}
 	page, err := h.reader.SearchArtists(request.Context(), catalog.ArtistFilter{
-		Name: request.URL.Query().Get(ParameterName), RealName: request.URL.Query().Get(ParameterRealName),
-		Profile: request.URL.Query().Get(ParameterProfile),
+		Name: name, RealName: realName,
 	}, pageRequest)
 	if err != nil {
 		h.responder.RepositoryError(writer, request, err)
 		return
 	}
-	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, pageRequest, request.URL.Path))
+	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, request.URL.Path))
 }
 
 func (h *ArtistHandler) Get(writer http.ResponseWriter, request *http.Request) {
@@ -54,10 +61,7 @@ func (h *ArtistHandler) Releases(writer http.ResponseWriter, request *http.Reque
 		h.responder.BadRequest(writer, request, err)
 		return
 	}
-	pageRequest, err := parsePage(request.URL.Query(), sortFields(
-		catalog.FieldID, catalog.FieldTitle, catalog.FieldCountry, catalog.FieldMasterID,
-		catalog.FieldReleasedYear, catalog.FieldReleasedMonth, catalog.FieldReleasedDay,
-	), defaultIDSort())
+	pageRequest, err := parseCursorPage(request.URL.Query())
 	if err != nil {
 		h.responder.BadRequest(writer, request, err)
 		return
@@ -67,5 +71,5 @@ func (h *ArtistHandler) Releases(writer http.ResponseWriter, request *http.Reque
 		h.responder.RepositoryError(writer, request, err)
 		return
 	}
-	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, pageRequest, request.URL.Path))
+	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, request.URL.Path))
 }

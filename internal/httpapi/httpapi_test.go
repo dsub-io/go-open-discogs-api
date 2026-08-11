@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	testServerURL    = "https://api.example.com"
-	testCacheControl = "public, max-age=10"
+	testServerURL                   = "https://api.example.com"
+	testCacheControl                = "public, max-age=10"
+	testSnapshotDescriptionFragment = "currently imported public Discogs monthly dump snapshot"
+	testNotFoundDescriptionFragment = "does not assert absence from Discogs"
 )
 
 var errRepository = errors.New("repository failure")
@@ -32,16 +34,16 @@ func TestRouterServesEveryContractRoute(t *testing.T) {
 		path     string
 		contains string
 	}{
-		{"/artists?name=a&real_name=b&profile=c&page=2&size=31&sort=name,desc", `"total_elements":1`},
+		{"/artists?name=alpha&real_name=beta&after_id=1&size=30", `"has_more":false`},
 		{"/artists/1", `"release_url"`},
-		{"/artists/1/releases?sort=released_year,desc", `"resource_url"`},
-		{"/labels?contact_info=a&data_quality=b&name=c&profile=d&sort=name,asc", `"total_elements":1`},
+		{"/artists/1/releases?after_id=1", `"resource_url"`},
+		{"/labels?name=label", `"has_more":false`},
 		{"/labels/1", `"parent_label"`},
-		{"/labels/1/releases?sort=year,desc", `"catno"`},
-		{"/masters?title=a&year=2000&sort=released_year,desc", `"total_elements":1`},
+		{"/labels/1/releases?after_id=1", `"catno"`},
+		{"/masters?title=master&year=2000", `"has_more":false`},
 		{"/masters/1", `"main_release"`},
-		{"/masters/1/releases?sort=title,asc", `"artist_id"`},
-		{"/releases?title=a&country=US&year=2000&month=2&master=true&sort=country,desc", `"total_elements":1`},
+		{"/masters/1/releases?after_id=1", `"artist_id"`},
+		{"/releases?title=release&country=US&year=2000&month=2&master=true", `"has_more":false`},
 		{"/releases/1", `"companies"`},
 		{RouteOpenAPI, `"openapi": "3.1.0"`},
 		{RouteOpenAPIJSON, `"openapi": "3.1.0"`},
@@ -89,10 +91,10 @@ func TestRouterRejectsInvalidTransportInput(t *testing.T) {
 	t.Parallel()
 	handler := testRouter(&repositoryStub{}, false, &bytes.Buffer{})
 	paths := []string{
-		"/artists?sort=unknown", "/artists/not-an-id", "/artists/0/releases", "/artists/1/releases?sort=unknown",
-		"/labels?sort=unknown", "/labels/0", "/labels/0/releases", "/labels/1/releases?sort=unknown",
-		"/masters?year=invalid", "/masters?sort=unknown", "/masters/0", "/masters/0/releases", "/masters/1/releases?sort=unknown",
-		"/releases?year=invalid", "/releases?month=13", "/releases?master=maybe", "/releases?sort=unknown", "/releases/0",
+		"/artists?name=ab", "/artists?real_name=ab", "/artists?after_id=-1", "/artists?size=31", "/artists/not-an-id", "/artists/0/releases", "/artists/1/releases?after_id=invalid",
+		"/labels?name=ab", "/labels?size=31", "/labels/0", "/labels/0/releases", "/labels/1/releases?after_id=invalid",
+		"/masters?title=ab", "/masters?year=invalid", "/masters?after_id=invalid", "/masters/0", "/masters/0/releases", "/masters/1/releases?size=31",
+		"/releases?title=ab", "/releases?country=" + strings.Repeat("x", maximumCountryLength+1), "/releases?after_id=invalid", "/releases?year=invalid", "/releases?month=13", "/releases?month=2", "/releases?master=maybe", "/releases/0",
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
@@ -124,33 +126,41 @@ func TestOpenAPIDocumentIsValid(t *testing.T) {
 	if err := document.Validate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(document.Info.Description, testSnapshotDescriptionFragment) {
+		t.Fatalf("OpenAPI description does not define snapshot semantics: %s", document.Info.Description)
+	}
+	notFound := document.Components.Responses["NotFound"]
+	if notFound == nil || notFound.Value == nil || notFound.Value.Description == nil ||
+		!strings.Contains(*notFound.Value.Description, testNotFoundDescriptionFragment) {
+		t.Fatalf("OpenAPI 404 response does not define snapshot semantics: %+v", notFound)
+	}
 }
 
 func TestPaginationAndRequestParsing(t *testing.T) {
 	t.Parallel()
-	request, err := parsePage(url.Values{ParameterSize: {"100"}}, sortFields(catalog.FieldID), defaultIDSort())
-	if err != nil || request.Page != 1 || request.Size != maximumPageSize || request.Offset() != 0 {
+	request, err := parseCursorPage(url.Values{ParameterAfterID: {"40"}, ParameterSize: {"30"}})
+	if err != nil || request.AfterID != 40 || request.Size != maximumPageSize || request.FetchSize() != 31 {
 		t.Fatalf("request=%+v err=%v", request, err)
 	}
-	request, err = parsePage(url.Values{ParameterPage: {"3"}, ParameterSize: {"2"}, ParameterSort: {"id", "id,desc"}}, sortFields(catalog.FieldID), defaultIDSort())
-	if err != nil || request.Offset() != 4 || len(request.Sort) != 2 || request.Sort[1].Direction != catalog.Descending {
+	request, err = parseCursorPage(url.Values{})
+	if err != nil || request.AfterID != 0 || request.Size != defaultPageSize {
 		t.Fatalf("request=%+v err=%v", request, err)
 	}
 	invalid := []url.Values{
-		{ParameterPage: {"0"}}, {ParameterSize: {"invalid"}}, {ParameterSort: {"id,sideways"}}, {ParameterSort: {"id,asc,extra"}},
+		{ParameterAfterID: {"-1"}}, {ParameterAfterID: {"2147483648"}}, {ParameterSize: {"invalid"}}, {ParameterSize: {"31"}},
 	}
 	for _, values := range invalid {
-		if _, err := parsePage(values, sortFields(catalog.FieldID), defaultIDSort()); err == nil {
+		if _, err := parseCursorPage(values); err == nil {
 			t.Fatalf("accepted invalid values: %v", values)
 		}
 	}
 
-	page := pageResponse(catalog.Page[catalog.Artist]{Items: nil, Total: 0}, catalog.PageRequest{Page: 1, Size: 20}, RouteArtists)
-	if page.PageNumber != 0 || !page.First || !page.Last || page.Items == nil || page.Sorted {
+	page := pageResponse(catalog.Page[catalog.Artist]{Items: nil}, RouteArtists)
+	if page.HasMore || page.NextAfterID != nil || page.Items == nil || page.PageSize != 0 {
 		t.Fatalf("unexpected empty page: %+v", page)
 	}
-	page = pageResponse(catalog.Page[catalog.Artist]{Items: []catalog.Artist{{ID: 1}}, Total: 21}, catalog.PageRequest{Page: 2, Size: 20, Sort: defaultIDSort()}, RouteArtists)
-	if page.TotalPages != 2 || !page.Last || page.First || !page.Sorted {
+	page = pageResponse(catalog.NewPage([]catalog.Artist{{ID: 1}, {ID: 2}}, 1), RouteArtists)
+	if !page.HasMore || page.NextAfterID == nil || *page.NextAfterID != 1 || page.PageSize != 1 {
 		t.Fatalf("unexpected populated page: %+v", page)
 	}
 
@@ -162,6 +172,18 @@ func TestPaginationAndRequestParsing(t *testing.T) {
 	}
 	if value, err := optionalBool("", ParameterMaster); err != nil || value != nil {
 		t.Fatalf("optional bool value=%v err=%v", value, err)
+	}
+	if value, err := optionalSearchTerm(" abc ", ParameterName); err != nil || value != "abc" {
+		t.Fatalf("search value=%q err=%v", value, err)
+	}
+	if _, err := optionalSearchTerm("ab", ParameterName); err == nil {
+		t.Fatal("short search term was accepted")
+	}
+	if _, err := optionalSearchTerm(string([]byte{0xff, 0xfe, 0xfd}), ParameterName); err == nil {
+		t.Fatal("invalid UTF-8 search term was accepted")
+	}
+	if value, err := optionalCountry(" KR "); err != nil || value != "KR" {
+		t.Fatalf("country=%q err=%v", value, err)
 	}
 }
 
@@ -184,6 +206,9 @@ func TestResponderErrorMappingAndBufferBounds(t *testing.T) {
 		responder.RepositoryError(response, request, test.err)
 		if response.Code != test.status {
 			t.Fatalf("error=%v status=%d", test.err, response.Code)
+		}
+		if errors.Is(test.err, catalog.ErrNotFound) && !strings.Contains(response.Body.String(), ProblemDetailNotFound) {
+			t.Fatalf("not-found response does not define snapshot semantics: %s", response.Body.String())
 		}
 	}
 	canceled := httptest.NewRecorder()
@@ -256,7 +281,7 @@ func (r *repositoryStub) SearchArtists(context.Context, catalog.ArtistFilter, ca
 	if r.panicSearch {
 		panic("test panic")
 	}
-	return catalog.Page[catalog.Artist]{Items: []catalog.Artist{{ID: 1}}, Total: 1}, r.err
+	return catalog.Page[catalog.Artist]{Items: []catalog.Artist{{ID: 1}}}, r.err
 }
 
 func (r *repositoryStub) Artist(context.Context, int64) (catalog.ArtistDetail, error) {
@@ -264,11 +289,11 @@ func (r *repositoryStub) Artist(context.Context, int64) (catalog.ArtistDetail, e
 }
 
 func (r *repositoryStub) ArtistReleases(context.Context, int64, catalog.PageRequest) (catalog.Page[catalog.ArtistRelease], error) {
-	return catalog.Page[catalog.ArtistRelease]{Items: []catalog.ArtistRelease{{ID: 1, ResourceURL: testServerURL + "/releases/1"}}, Total: 1}, r.err
+	return catalog.Page[catalog.ArtistRelease]{Items: []catalog.ArtistRelease{{ID: 1, ResourceURL: testServerURL + "/releases/1"}}}, r.err
 }
 
 func (r *repositoryStub) SearchLabels(context.Context, catalog.LabelFilter, catalog.PageRequest) (catalog.Page[catalog.Label], error) {
-	return catalog.Page[catalog.Label]{Items: []catalog.Label{{ID: 1}}, Total: 1}, r.err
+	return catalog.Page[catalog.Label]{Items: []catalog.Label{{ID: 1}}}, r.err
 }
 
 func (r *repositoryStub) Label(context.Context, int64) (catalog.LabelDetail, error) {
@@ -276,11 +301,11 @@ func (r *repositoryStub) Label(context.Context, int64) (catalog.LabelDetail, err
 }
 
 func (r *repositoryStub) LabelReleases(context.Context, int64, catalog.PageRequest) (catalog.Page[catalog.LabelRelease], error) {
-	return catalog.Page[catalog.LabelRelease]{Items: []catalog.LabelRelease{{ID: 1}}, Total: 1}, r.err
+	return catalog.Page[catalog.LabelRelease]{Items: []catalog.LabelRelease{{ID: 1}}}, r.err
 }
 
 func (r *repositoryStub) SearchMasters(context.Context, catalog.MasterFilter, catalog.PageRequest) (catalog.Page[catalog.Master], error) {
-	return catalog.Page[catalog.Master]{Items: []catalog.Master{{ID: 1}}, Total: 1}, r.err
+	return catalog.Page[catalog.Master]{Items: []catalog.Master{{ID: 1}}}, r.err
 }
 
 func (r *repositoryStub) Master(context.Context, int64) (catalog.MasterDetail, error) {
@@ -288,11 +313,11 @@ func (r *repositoryStub) Master(context.Context, int64) (catalog.MasterDetail, e
 }
 
 func (r *repositoryStub) MasterReleases(context.Context, int64, catalog.PageRequest) (catalog.Page[catalog.MasterRelease], error) {
-	return catalog.Page[catalog.MasterRelease]{Items: []catalog.MasterRelease{{ID: 1, Artists: []string{}, ArtistIDs: []int64{}}}, Total: 1}, r.err
+	return catalog.Page[catalog.MasterRelease]{Items: []catalog.MasterRelease{{ID: 1, Artists: []string{}, ArtistIDs: []int64{}}}}, r.err
 }
 
 func (r *repositoryStub) SearchReleases(context.Context, catalog.ReleaseFilter, catalog.PageRequest) (catalog.Page[catalog.Release], error) {
-	return catalog.Page[catalog.Release]{Items: []catalog.Release{{ID: 1}}, Total: 1}, r.err
+	return catalog.Page[catalog.Release]{Items: []catalog.Release{{ID: 1}}}, r.err
 }
 
 func (r *repositoryStub) Release(context.Context, int64) (catalog.ReleaseDetail, error) {
