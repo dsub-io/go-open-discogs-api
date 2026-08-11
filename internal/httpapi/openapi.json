@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenDiscogs API",
-    "version": "0.1.0",
-    "description": "High-performance read-only API for PostgreSQL databases populated from public Discogs data dumps."
+    "version": "1.0.0",
+    "description": "High-performance read-only API for the currently imported public Discogs monthly dump snapshot. Collection resources use stable ascending-ID cursor pagination without exact counts. The service does not call or proxy the Discogs API, perform live hydration, or accept catalog writes."
   },
   "servers": [{"url": "/"}],
   "paths": {
@@ -12,12 +12,10 @@
         "operationId": "searchArtists",
         "tags": ["artists"],
         "parameters": [
-          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/AfterID"},
           {"$ref": "#/components/parameters/Size"},
-          {"$ref": "#/components/parameters/Sort"},
           {"$ref": "#/components/parameters/Name"},
-          {"$ref": "#/components/parameters/RealName"},
-          {"$ref": "#/components/parameters/Profile"}
+          {"$ref": "#/components/parameters/RealName"}
         ],
         "responses": {
           "200": {"description": "Artist page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ArtistPage"}}}},
@@ -45,9 +43,8 @@
         "tags": ["artists", "releases"],
         "parameters": [
           {"$ref": "#/components/parameters/ID"},
-          {"$ref": "#/components/parameters/Page"},
-          {"$ref": "#/components/parameters/Size"},
-          {"$ref": "#/components/parameters/Sort"}
+          {"$ref": "#/components/parameters/AfterID"},
+          {"$ref": "#/components/parameters/Size"}
         ],
         "responses": {
           "200": {"description": "Artist release page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ArtistReleasePage"}}}},
@@ -61,13 +58,9 @@
         "operationId": "searchLabels",
         "tags": ["labels"],
         "parameters": [
-          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/AfterID"},
           {"$ref": "#/components/parameters/Size"},
-          {"$ref": "#/components/parameters/Sort"},
-          {"$ref": "#/components/parameters/Name"},
-          {"$ref": "#/components/parameters/Profile"},
-          {"$ref": "#/components/parameters/ContactInfo"},
-          {"$ref": "#/components/parameters/DataQuality"}
+          {"$ref": "#/components/parameters/Name"}
         ],
         "responses": {
           "200": {"description": "Label page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LabelPage"}}}},
@@ -95,9 +88,8 @@
         "tags": ["labels", "releases"],
         "parameters": [
           {"$ref": "#/components/parameters/ID"},
-          {"$ref": "#/components/parameters/Page"},
-          {"$ref": "#/components/parameters/Size"},
-          {"$ref": "#/components/parameters/Sort"}
+          {"$ref": "#/components/parameters/AfterID"},
+          {"$ref": "#/components/parameters/Size"}
         ],
         "responses": {
           "200": {"description": "Label release page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LabelReleasePage"}}}},
@@ -111,9 +103,8 @@
         "operationId": "searchMasters",
         "tags": ["masters"],
         "parameters": [
-          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/AfterID"},
           {"$ref": "#/components/parameters/Size"},
-          {"$ref": "#/components/parameters/Sort"},
           {"$ref": "#/components/parameters/Title"},
           {"$ref": "#/components/parameters/Year"}
         ],
@@ -143,9 +134,8 @@
         "tags": ["masters", "releases"],
         "parameters": [
           {"$ref": "#/components/parameters/ID"},
-          {"$ref": "#/components/parameters/Page"},
-          {"$ref": "#/components/parameters/Size"},
-          {"$ref": "#/components/parameters/Sort"}
+          {"$ref": "#/components/parameters/AfterID"},
+          {"$ref": "#/components/parameters/Size"}
         ],
         "responses": {
           "200": {"description": "Master release page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/MasterReleasePage"}}}},
@@ -159,9 +149,8 @@
         "operationId": "searchReleases",
         "tags": ["releases"],
         "parameters": [
-          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/AfterID"},
           {"$ref": "#/components/parameters/Size"},
-          {"$ref": "#/components/parameters/Sort"},
           {"$ref": "#/components/parameters/Title"},
           {"$ref": "#/components/parameters/Country"},
           {"$ref": "#/components/parameters/Year"},
@@ -201,23 +190,19 @@
   "components": {
     "parameters": {
       "ID": {"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64", "minimum": 1, "maximum": 2147483647}},
-      "Page": {"name": "page", "in": "query", "schema": {"type": "integer", "minimum": 1, "default": 1}},
-      "Size": {"name": "size", "in": "query", "description": "Values above 30 are capped at 30.", "schema": {"type": "integer", "minimum": 1, "maximum": 30, "default": 20}},
-      "Sort": {"name": "sort", "in": "query", "description": "Repeatable field,direction pair. Direction is asc or desc.", "schema": {"type": "array", "items": {"type": "string"}}, "explode": true},
-      "Name": {"name": "name", "in": "query", "schema": {"type": "string"}},
-      "RealName": {"name": "real_name", "in": "query", "schema": {"type": "string"}},
-      "Profile": {"name": "profile", "in": "query", "schema": {"type": "string"}},
-      "ContactInfo": {"name": "contact_info", "in": "query", "schema": {"type": "string"}},
-      "DataQuality": {"name": "data_quality", "in": "query", "schema": {"type": "string"}},
-      "Title": {"name": "title", "in": "query", "schema": {"type": "string"}},
-      "Country": {"name": "country", "in": "query", "schema": {"type": "string"}},
+      "AfterID": {"name": "after_id", "in": "query", "description": "Return records with an ID greater than this cursor. Omit or use zero for the first page.", "schema": {"type": "integer", "format": "int64", "minimum": 0, "maximum": 2147483647, "default": 0}},
+      "Size": {"name": "size", "in": "query", "description": "Number of records to return. Values above 30 are rejected.", "schema": {"type": "integer", "minimum": 1, "maximum": 30, "default": 20}},
+      "Name": {"name": "name", "in": "query", "description": "Case-insensitive substring search; 3 to 200 characters.", "schema": {"type": "string", "minLength": 3, "maxLength": 200}},
+      "RealName": {"name": "real_name", "in": "query", "description": "Case-insensitive substring search; 3 to 200 characters.", "schema": {"type": "string", "minLength": 3, "maxLength": 200}},
+      "Title": {"name": "title", "in": "query", "description": "Case-insensitive substring search; 3 to 200 characters.", "schema": {"type": "string", "minLength": 3, "maxLength": 200}},
+      "Country": {"name": "country", "in": "query", "description": "Case-insensitive exact match.", "schema": {"type": "string", "minLength": 1, "maxLength": 255}},
       "Year": {"name": "year", "in": "query", "schema": {"type": "integer", "minimum": 0, "maximum": 32767}},
-      "Month": {"name": "month", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 12}},
+      "Month": {"name": "month", "in": "query", "description": "Requires year.", "schema": {"type": "integer", "minimum": 1, "maximum": 12}},
       "Master": {"name": "master", "in": "query", "schema": {"type": "boolean"}}
     },
     "responses": {
       "BadRequest": {"description": "Invalid request", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}},
-      "NotFound": {"description": "Resource not found", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}},
+      "NotFound": {"description": "Resource absent from the currently imported dump snapshot; this does not assert absence from Discogs", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}},
       "GatewayTimeout": {"description": "Database query timeout", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}}
     },
     "schemas": {
@@ -226,15 +211,11 @@
       "NullableBoolean": {"type": ["boolean", "null"]},
       "PageEnvelope": {
         "type": "object",
-        "required": ["items", "total_elements", "total_pages", "page_number", "page_size", "last", "first", "sorted", "resource_uri"],
+        "required": ["items", "next_after_id", "has_more", "page_size", "resource_uri"],
         "properties": {
-          "total_elements": {"type": "integer", "format": "int64"},
-          "total_pages": {"type": "integer"},
-          "page_number": {"type": "integer"},
+          "next_after_id": {"type": ["integer", "null"], "format": "int64", "minimum": 1, "maximum": 2147483647},
+          "has_more": {"type": "boolean"},
           "page_size": {"type": "integer"},
-          "last": {"type": "boolean"},
-          "first": {"type": "boolean"},
-          "sorted": {"type": "boolean"},
           "resource_uri": {"type": "string"}
         }
       },

@@ -9,11 +9,22 @@ The project is pre-release. The Java [`open-discogs-api`](https://github.com/dsu
 - Public HTTP (`:8080`) serves the catalog and OpenAPI contract.
 - Management HTTP (`127.0.0.1:8081`) serves liveness, readiness, and optional Prometheus metrics.
 - PostgreSQL access is read-only. Schema and index migrations belong to [`open-discogs-model`](https://github.com/dsub-io/open-discogs-model), never this service.
+- Every deployment serves only data imported from the public monthly Discogs data dumps. The service never calls the Discogs API, accepts Discogs credentials, performs live hydration, or accepts catalog writes.
 - OTLP tracing is opt-in. With tracing disabled, no exporter or telemetry network activity is created.
 - Prometheus metrics are local pull telemetry and can be disabled independently.
-- Pages are capped at 30 records; DB connections, query duration, CPU use, memory use, response buffer retention, and count caching are bounded.
+- Cursor pages are capped at 30 records; DB connections, query duration, CPU use, memory use, and response buffer retention are bounded.
 
 The dependency direction is `catalog domain <- HTTP/PostgreSQL adapters <- app bootstrap`. HTTP, persistence, telemetry, and process lifecycle have separate packages and focused interfaces.
+
+## Data source and freshness
+
+OpenDiscogs is a query layer over the dump snapshot currently present in PostgreSQL. It does not promise real-time parity with discogs.com. A detail request returns `404` when the resource is absent from the imported snapshot; that response does not assert that the resource is absent from Discogs. The next successful batch import is the only path by which the catalog changes.
+
+`API_CACHE_CONTROL` controls reuse of OpenDiscogs HTTP responses. It is not a source-data freshness guarantee and is unrelated to the age of the imported monthly snapshot.
+
+This boundary is intentional. The current [Discogs API Terms of Use](https://support.discogs.com/hc/en-us/articles/360009334593-API-Terms-of-Use) impose conditions including six-hour freshness, limited caching, rate-limit non-circumvention, required attribution, restrictions on transferring Restricted Data, revocable access, and broad accuracy and availability disclaimers. OpenDiscogs does not proxy that API or shift those obligations through an optional authenticated or anonymous mode. Applications that require data newer than the imported dump must evaluate and integrate the Discogs API independently under its then-current terms.
+
+The MIT license covers this project's source code. Data remains subject to the rights and terms applicable at its source.
 
 ## Run
 
@@ -46,7 +57,7 @@ Every runtime setting exposed by CLI has an ENV equivalent with identical meanin
 | `--address` | `API_ADDRESS` | string | `:8080` | optional | no | Public HTTP listener. |
 | `--management-address` | `API_MANAGEMENT_ADDRESS` | string | `127.0.0.1:8081` | optional | no | Management HTTP listener. |
 | `--server-url` | `API_SERVER_URL` | string | `http://localhost:8080` | optional | no | Public URL used in API links. |
-| `--cache-control` | `API_CACHE_CONTROL` | string | `public, max-age=60, stale-while-revalidate=300` | optional | no | Successful API response cache policy. |
+| `--cache-control` | `API_CACHE_CONTROL` | string | `public, max-age=60, stale-while-revalidate=300` | optional | no | Successful API response cache policy; not dump freshness. |
 | `--access-log` | `API_ACCESS_LOG` | boolean | `false` | optional | no | Structured request log. |
 | `--max-procs` | `API_MAX_PROCS` | integer | `0` (unlimited) | optional | no | Positive values set exact `GOMAXPROCS`; zero adds no application limit. |
 | `--memory-limit-mib` | `API_MEMORY_LIMIT_MIB` | integer | `0` (unlimited) | optional | no | Positive values set the Go soft memory limit; zero adds no application limit. |
@@ -77,6 +88,21 @@ Every runtime setting exposed by CLI has an ENV equivalent with identical meanin
 - Readiness: management `GET /readyz` or `GET /actuator/health`
 - Metrics, when enabled: management `GET /metrics` or `GET /actuator/prometheus`
 
+Collections use ascending resource-ID keyset pagination. Omit `after_id` for
+the first page, then pass the response's non-null `next_after_id` while
+`has_more` is true. Responses intentionally omit exact totals and page counts
+because calculating them for arbitrary filters does not remain bounded as the
+dump grows. `size` defaults to 20 and values above 30 are rejected.
+
+Substring search is limited to artist and label names, artist real names, and
+master and release titles. Terms must contain 3 to 200 Unicode characters so
+PostgreSQL can use the canonical trigram indexes. Large profile, contact, and
+notes fields are returned in detail responses but are not searchable. Release
+month filtering requires a year.
+
+Reproducible before/after measurements and their full-dump limitations are in
+[`docs/performance/2026-08-11-cursor-query-scalability.md`](docs/performance/2026-08-11-cursor-query-scalability.md).
+
 The management listener defaults to loopback. Kubernetes explicitly binds it to `:8081` so kubelet probes can reach the pod.
 
 ## Containers and Kubernetes
@@ -97,7 +123,7 @@ Release tags publish multi-architecture `linux/amd64` and `linux/arm64` images t
 
 ## Resource sizing
 
-The application imposes no CPU or Go memory limit unless one is configured. Negative values fail startup, zero is unlimited from the application's perspective, and positive values are applied without an arbitrary policy ceiling. `API_MEMORY_LIMIT_MIB` is a Go runtime soft limit, not a hard RSS cap; container policy remains authoritative. The database pool is the exception because it protects a shared service: its production-safe default is 10 maximum and 0 minimum connections. The response buffer pool retains at most 4 MiB and the count cache is bounded.
+The application imposes no CPU or Go memory limit unless one is configured. Negative values fail startup, zero is unlimited from the application's perspective, and positive values are applied without an arbitrary policy ceiling. `API_MEMORY_LIMIT_MIB` is a Go runtime soft limit, not a hard RSS cap; container policy remains authoritative. The database pool is the exception because it protects a shared service: its production-safe default is 10 maximum and 0 minimum connections. The response buffer pool retains at most 4 MiB.
 
 For a 512 MiB container, a reasonable starting point is `API_MAX_PROCS=2`, `API_MEMORY_LIMIT_MIB=384`, `API_DB_MAX_CONNS=4`, and `API_DB_STATEMENT_CACHE=64`. These are explicit limits, not CPU-ratio guesses.
 

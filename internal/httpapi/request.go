@@ -5,19 +5,19 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
-	"github.com/dsub-io/go-open-discogs-api/internal/catalog"
+	"unicode/utf8"
 )
 
 const (
-	errorIDRange    = "id must be between 1 and %d"
-	errorBoolean    = "%s must be true or false"
-	errorSortField  = "unsupported sort field %q"
-	errorSortOrder  = "sort direction must be asc or desc"
-	errorSortFormat = "sort must use field,direction"
+	errorIDRange           = "id must be between 1 and %d"
+	errorBoolean           = "%s must be true or false"
+	errorTextEncoding      = "%s must be valid UTF-8"
+	errorTextLength        = "%s must contain between %d and %d characters"
+	errorMonthRequiresYear = "month requires year"
+	minimumSearchLength    = 3
+	maximumSearchLength    = 200
+	maximumCountryLength   = 255
 )
-
-type SortFieldSet map[string]struct{}
 
 func pathID(request *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(request.PathValue(ParameterID), 10, 64)
@@ -49,14 +49,25 @@ func optionalBool(raw, name string) (*bool, error) {
 	return &value, nil
 }
 
-func sortFields(names ...string) SortFieldSet {
-	result := make(SortFieldSet, len(names))
-	for _, name := range names {
-		result[name] = struct{}{}
-	}
-	return result
+func optionalSearchTerm(raw, name string) (string, error) {
+	return optionalTextFilter(raw, minimumSearchLength, maximumSearchLength, name)
 }
 
-func defaultIDSort() []catalog.Sort {
-	return []catalog.Sort{{Field: catalog.FieldID, Direction: catalog.Ascending}}
+func optionalCountry(raw string) (string, error) {
+	return optionalTextFilter(raw, 1, maximumCountryLength, ParameterCountry)
+}
+
+func optionalTextFilter(raw string, minimum, maximum int, name string) (string, error) {
+	if !utf8.ValidString(raw) {
+		return "", fmt.Errorf(errorTextEncoding, name)
+	}
+	normalized := strings.TrimSpace(raw)
+	if normalized == "" {
+		return "", nil
+	}
+	length := utf8.RuneCountInString(normalized)
+	if length < minimum || length > maximum {
+		return "", fmt.Errorf(errorTextLength, name, minimum, maximum)
+	}
+	return normalized, nil
 }
