@@ -7,61 +7,51 @@ import (
 
 var ErrNotFound = errors.New("resource not found")
 
-type Direction string
-
 const (
-	Ascending          Direction = "asc"
-	Descending         Direction = "desc"
-	FieldID                      = "id"
-	FieldName                    = "name"
-	FieldRealName                = "real_name"
-	FieldProfile                 = "profile"
-	FieldContactInfo             = "contact_info"
-	FieldDataQuality             = "data_quality"
-	FieldTitle                   = "title"
-	FieldCountry                 = "country"
-	FieldMasterID                = "master_id"
-	FieldReleasedYear            = "released_year"
-	FieldReleasedMonth           = "released_month"
-	FieldReleasedDay             = "released_day"
-	FieldYear                    = "year"
+	MinimumResourceID int64 = 1
 )
 
-type Sort struct {
-	Field     string
-	Direction Direction
-}
-
 type PageRequest struct {
-	Page int
-	Size int
-	Sort []Sort
+	AfterID int64
+	Size    int
 }
 
-func (p PageRequest) Offset() int64 {
-	return int64(p.Page-1) * int64(p.Size)
+func (p PageRequest) FetchSize() int {
+	return p.Size + 1
 }
 
 type PageItem interface {
-	pageItem()
+	pageID() int64
 }
 
 type Page[T PageItem] struct {
-	Items []T
-	Total int64
+	Items   []T
+	HasMore bool
+}
+
+func NewPage[T PageItem](items []T, requestedSize int) Page[T] {
+	hasMore := len(items) > requestedSize
+	if hasMore {
+		items = items[:requestedSize]
+	}
+	return Page[T]{Items: items, HasMore: hasMore}
+}
+
+func (p Page[T]) NextAfterID() *int64 {
+	if !p.HasMore || len(p.Items) == 0 {
+		return nil
+	}
+	next := p.Items[len(p.Items)-1].pageID()
+	return &next
 }
 
 type ArtistFilter struct {
 	Name     string
 	RealName string
-	Profile  string
 }
 
 type LabelFilter struct {
-	ContactInfo string
-	DataQuality string
-	Name        string
-	Profile     string
+	Name string
 }
 
 type MasterFilter struct {
@@ -115,7 +105,7 @@ type Artist struct {
 	DataQuality *string `json:"data_quality"`
 }
 
-func (Artist) pageItem() {}
+func (item Artist) pageID() int64 { return item.ID }
 
 type ArtistReference struct {
 	ID          int64   `json:"id"`
@@ -151,7 +141,7 @@ type ArtistRelease struct {
 	ResourceURL       string  `json:"resource_url"`
 }
 
-func (ArtistRelease) pageItem() {}
+func (item ArtistRelease) pageID() int64 { return item.ID }
 
 type Label struct {
 	ID          int64   `json:"id"`
@@ -161,7 +151,7 @@ type Label struct {
 	Profile     *string `json:"profile"`
 }
 
-func (Label) pageItem() {}
+func (item Label) pageID() int64 { return item.ID }
 
 type LabelReference struct {
 	ID          int64   `json:"id"`
@@ -188,7 +178,7 @@ type LabelRelease struct {
 	Format           *string `json:"format"`
 }
 
-func (LabelRelease) pageItem() {}
+func (item LabelRelease) pageID() int64 { return item.ID }
 
 type Master struct {
 	ID           int64   `json:"id"`
@@ -197,7 +187,7 @@ type Master struct {
 	ReleasedYear *int    `json:"released_year"`
 }
 
-func (Master) pageItem() {}
+func (item Master) pageID() int64 { return item.ID }
 
 type MasterVideo struct {
 	URL         *string `json:"url"`
@@ -226,7 +216,7 @@ type MasterRelease struct {
 	ResourceURL string   `json:"resource_url"`
 }
 
-func (MasterRelease) pageItem() {}
+func (item MasterRelease) pageID() int64 { return item.ID }
 
 type Release struct {
 	ID                int64   `json:"id"`
@@ -243,7 +233,7 @@ type Release struct {
 	Status            *string `json:"status"`
 }
 
-func (Release) pageItem() {}
+func (item Release) pageID() int64 { return item.ID }
 
 type ReleaseArtist struct {
 	ID          int64   `json:"id"`

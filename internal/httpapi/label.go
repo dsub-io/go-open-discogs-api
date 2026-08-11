@@ -16,22 +16,24 @@ func NewLabelHandler(reader catalog.LabelReader, responder *Responder) *LabelHan
 }
 
 func (h *LabelHandler) Search(writer http.ResponseWriter, request *http.Request) {
-	pageRequest, err := parsePage(request.URL.Query(), sortFields(
-		catalog.FieldID, catalog.FieldContactInfo, catalog.FieldDataQuality, catalog.FieldName, catalog.FieldProfile,
-	), defaultIDSort())
+	pageRequest, err := parseCursorPage(request.URL.Query())
+	if err != nil {
+		h.responder.BadRequest(writer, request, err)
+		return
+	}
+	name, err := optionalSearchTerm(request.URL.Query().Get(ParameterName), ParameterName)
 	if err != nil {
 		h.responder.BadRequest(writer, request, err)
 		return
 	}
 	page, err := h.reader.SearchLabels(request.Context(), catalog.LabelFilter{
-		ContactInfo: request.URL.Query().Get(ParameterContactInfo), DataQuality: request.URL.Query().Get(ParameterDataQuality),
-		Name: request.URL.Query().Get(ParameterName), Profile: request.URL.Query().Get(ParameterProfile),
+		Name: name,
 	}, pageRequest)
 	if err != nil {
 		h.responder.RepositoryError(writer, request, err)
 		return
 	}
-	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, pageRequest, request.URL.Path))
+	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, request.URL.Path))
 }
 
 func (h *LabelHandler) Get(writer http.ResponseWriter, request *http.Request) {
@@ -54,7 +56,7 @@ func (h *LabelHandler) Releases(writer http.ResponseWriter, request *http.Reques
 		h.responder.BadRequest(writer, request, err)
 		return
 	}
-	pageRequest, err := parsePage(request.URL.Query(), sortFields(catalog.FieldID, catalog.FieldTitle, catalog.FieldYear), defaultIDSort())
+	pageRequest, err := parseCursorPage(request.URL.Query())
 	if err != nil {
 		h.responder.BadRequest(writer, request, err)
 		return
@@ -64,5 +66,5 @@ func (h *LabelHandler) Releases(writer http.ResponseWriter, request *http.Reques
 		h.responder.RepositoryError(writer, request, err)
 		return
 	}
-	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, pageRequest, request.URL.Path))
+	writeJSON(h.responder, writer, http.StatusOK, pageResponse(page, request.URL.Path))
 }
