@@ -5,14 +5,15 @@
 
 ### Features
 
-* support configurable database schemas ([8cd2bb9](https://github.com/dsub-io/go-open-discogs-api/commit/8cd2bb9a9bddea5facdf6f7becca09779cdbbe7e))
-* support configurable database schemas ([e2a9b7c](https://github.com/dsub-io/go-open-discogs-api/commit/e2a9b7c871143f662a048f876e30f9e40a7fe2c3))
+* add operator-selected PostgreSQL schemas through `--database-schema` and `API_DATABASE_SCHEMA` ([e2a9b7c](https://github.com/dsub-io/go-open-discogs-api/commit/e2a9b7c871143f662a048f876e30f9e40a7fe2c3))
+* validate schema existence, `USAGE`, required tables, and `SELECT` privileges before opening listeners
+* retain `public` as the compatibility default while warning on every startup and keeping the API read-only
 
 
 ### Bug Fixes
 
-* download model before readiness migrations ([bf6ab76](https://github.com/dsub-io/go-open-discogs-api/commit/bf6ab7612583affd3de9656169bd877b11f23b85))
-* harden connection count conversion ([7d83a61](https://github.com/dsub-io/go-open-discogs-api/commit/7d83a614404d54ea39811f80109eb525776f53c9))
+* download and validate canonical model migrations before fresh-runner readiness tests ([bf6ab76](https://github.com/dsub-io/go-open-discogs-api/commit/bf6ab7612583affd3de9656169bd877b11f23b85))
+* reject out-of-range database connection counts before narrowing to pgx `int32`, resolving CodeQL CWE-190 and CWE-681 ([7d83a61](https://github.com/dsub-io/go-open-discogs-api/commit/7d83a614404d54ea39811f80109eb525776f53c9))
 
 ## 1.0.0 (2026-08-11)
 
