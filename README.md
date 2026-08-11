@@ -9,6 +9,7 @@ The project is pre-release. The Java [`open-discogs-api`](https://github.com/dsu
 - Public HTTP (`:8080`) serves the catalog and OpenAPI contract.
 - Management HTTP (`127.0.0.1:8081`) serves liveness, readiness, and optional Prometheus metrics.
 - PostgreSQL access is read-only. Schema and index migrations belong to [`open-discogs-model`](https://github.com/dsub-io/open-discogs-model), never this service.
+- `API_DATABASE_SCHEMA` selects the already-imported schema. The API verifies schema usage, required tables, and `SELECT` privileges at startup but never creates or migrates database objects.
 - Every deployment serves only data imported from the public monthly Discogs data dumps. The service never calls the Discogs API, accepts Discogs credentials, performs live hydration, or accepts catalog writes.
 - OTLP tracing is opt-in. With tracing disabled, no exporter or telemetry network activity is created.
 - Prometheus metrics are local pull telemetry and can be disabled independently.
@@ -32,6 +33,7 @@ Use a complete PostgreSQL URL:
 
 ```sh
 API_DATABASE_URL='postgres://readonly:password@127.0.0.1:5432/discogs?sslmode=require' \
+API_DATABASE_SCHEMA='open_discogs' \
 go run .
 ```
 
@@ -45,6 +47,8 @@ go run . \
 ```
 
 CLI values override ENV values, which override defaults. Prefer ENV, Docker secrets, or Kubernetes Secrets for credentials because CLI arguments can be visible in the host process list.
+
+If `--database-schema` / `API_DATABASE_SCHEMA` is omitted, the API uses `public` and emits a `WARN` at startup. Set the same schema used by the batch importer to avoid mixing OpenDiscogs tables with unrelated public objects. The API role needs `CONNECT` on the database, `USAGE` on that schema, and read access to its tables; it does not need schema creation or migration privileges.
 
 `--help` and `--version` do not connect to PostgreSQL. `--healthcheck` probes
 `http://127.0.0.1:8081/readyz` and exits non-zero unless both the management
@@ -67,6 +71,7 @@ Every runtime setting exposed by CLI has an ENV equivalent with identical meanin
 | `--query-timeout` | `API_QUERY_TIMEOUT` | duration | `10s` | optional | no | Maximum PostgreSQL operation duration. |
 | `--shutdown-timeout` | `API_SHUTDOWN_TIMEOUT` | duration | `30s` | optional | no | Graceful shutdown deadline. |
 | `--database-url` | `API_DATABASE_URL` | string | empty | conditional | yes | Complete PostgreSQL URL; overrides split settings. |
+| `--database-schema` | `API_DATABASE_SCHEMA` | string | `public` | optional | no | Schema containing canonical OpenDiscogs tables; `public` emits a startup warning. |
 | `--db-host` | `API_DB_HOST` | string | empty | conditional | no | PostgreSQL `host:port` when URL is unset. |
 | `--db-username` | `API_DB_USERNAME` | string | empty | conditional | no | PostgreSQL username when URL is unset. |
 | `--db-password` | `API_DB_PASSWORD` | string | empty | conditional | yes | PostgreSQL password when URL is unset. |
@@ -117,6 +122,7 @@ docker build -t go-open-discogs-api:local .
 docker run --rm --read-only \
   -p 8080:8080 -p 127.0.0.1:8081:8081 \
   -e API_DATABASE_URL='postgres://readonly:password@database:5432/discogs?sslmode=require' \
+  -e API_DATABASE_SCHEMA='open_discogs' \
   go-open-discogs-api:local
 ```
 
