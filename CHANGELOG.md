@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.1.1](https://github.com/dsub-io/go-open-discogs-api/compare/v1.1.0...v1.1.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* make readiness follow canonical catalog bootstrap and refresh state instead of database connectivity alone ([#10](https://github.com/dsub-io/go-open-discogs-api/issues/10)) ([66ccd93](https://github.com/dsub-io/go-open-discogs-api/commit/66ccd933dc43805c88daa1e56205b6cfdc40aae5))
+* preserve collision-safe relation identities, multiple label catalog numbers, oversized format quantities, and unordered relation semantics
+* bound artist-release role aggregation after the cursor and consume `open-discogs-model` `v0.3.2`
+
+
+### Performance Improvements
+
+* on the documented 50,000-artist / 200,000-release fixture at concurrency 4, artist-release HTTP p99 fell from `4.698 ms` to `3.962 ms` (`15.7%` lower) while throughput rose from `1,441` to `2,237 requests/s` (`55.2%` higher)
+* PostgreSQL mean execution time for that path fell from `1.645 ms` to `0.214 ms` (`87.0%` lower)
+* after canonical V022, combined release-filter HTTP p99 fell from `57.608 ms` to `2.568 ms` (`95.5%` lower); model-owned SQL p99 fell from `6.856 ms` to `0.225 ms` (`96.7%` lower) at an index-size cost of `31,522,816 bytes` (`6.5%` growth on the post-V007 fixture)
+
+
+### Validation and Upgrade
+
+* validate all 11 public OpenAPI operations through 16 manual HTTP scenarios with zero failures
+* pass race-enabled tests, `100.0%` aggregate statement coverage, CodeQL, vulnerability checks, Compose/Kubernetes validation, and container readiness/dependency-failure tests without Docker residue
+* the API remains read-only and never migrates; deploy `open-discogs-model` `v0.3.2` V022 through either batch before starting this version
+
 ## [1.1.0](https://github.com/dsub-io/go-open-discogs-api/compare/v1.0.0...v1.1.0) (2026-08-11)
 
 
