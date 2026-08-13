@@ -62,7 +62,7 @@ func (s *Store) scanArtistRelease(row pgx.CollectableRow) (catalog.ArtistRelease
 
 func scanLabelRelease(row pgx.CollectableRow) (catalog.LabelRelease, error) {
 	var item catalog.LabelRelease
-	err := row.Scan(&item.ID, &item.Artist, &item.Title, &item.Year, &item.Status, &item.CategoryNotation, &item.Format)
+	err := row.Scan(&item.ID, &item.Artist, &item.Title, &item.Year, &item.Status, &item.CatalogNumbers, &item.Format)
 	return item, err
 }
 

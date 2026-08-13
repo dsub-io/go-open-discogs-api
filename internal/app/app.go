@@ -90,7 +90,7 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger, newPool po
 		metrics,
 		telemetryRuntime.HTTPTracer(),
 	).Handler()
-	managementHandler := management.NewHandler(pool, registry, cfg.MetricsEnabled).Routes()
+	managementHandler := management.NewHandler(repository, registry, cfg.MetricsEnabled).Routes()
 
 	servers := []configuredServer{
 		newConfiguredServer(serverRolePublic, cfg.PublicAddress, publicHandler, cfg),

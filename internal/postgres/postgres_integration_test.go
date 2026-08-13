@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -17,11 +18,12 @@ import (
 )
 
 const (
-	envTestDatabaseURL              = "TEST_DATABASE_URL"
-	defaultTestDatabaseURL          = "postgres://discogs:discogs@127.0.0.1:55432/discogs?sslmode=disable"
-	testPublicURL                   = "https://api.example.com"
-	testQueryTimeout                = 5 * time.Second
-	testSchemaMigrationLockID int64 = 7_803_151_124
+	envTestDatabaseURL                = "TEST_DATABASE_URL"
+	defaultTestDatabaseURL            = "postgres://discogs:discogs@127.0.0.1:55432/discogs?sslmode=disable"
+	testPublicURL                     = "https://api.example.com"
+	testQueryTimeout                  = 5 * time.Second
+	testSchemaMigrationLockID   int64 = 7_803_151_124
+	testOversizedFormatQuantity       = "1010487400000000000000000000000000000000000000000000"
 )
 
 var integrationPool *pgxpool.Pool
@@ -72,11 +74,12 @@ func TestStoreSearchAndRelatedQueries(t *testing.T) {
 
 	artistReleases, err := store.ArtistReleases(context.Background(), 1, request)
 	assertPage(t, artistReleases, 1, false, err)
-	if artistReleases.Items[0].ResourceURL != testPublicURL+"/releases/1" {
-		t.Fatalf("artist resource URL=%s", artistReleases.Items[0].ResourceURL)
+	if artistReleases.Items[0].ResourceURL != testPublicURL+"/releases/1" || value(artistReleases.Items[0].Role) != "Main,Producer" {
+		t.Fatalf("artist release=%+v", artistReleases.Items[0])
 	}
 	labelReleases, err := store.LabelReleases(context.Background(), 1, request)
 	assertPage(t, labelReleases, 1, false, err)
+	assertStrings(t, labelReleases.Items[0].CatalogNumbers, "CAT-0", "CAT-1")
 	masterReleases, err := store.MasterReleases(context.Background(), 1, request)
 	assertPage(t, masterReleases, 1, false, err)
 
@@ -101,25 +104,81 @@ func TestStoreDetailQueries(t *testing.T) {
 	t.Parallel()
 	store := New(integrationPool, testPublicURL, testQueryTimeout)
 	artist, err := store.Artist(context.Background(), 1)
-	if err != nil || artist.ID != 1 || len(artist.Members) != 1 || len(artist.Groups) != 1 || len(artist.Aliases) != 1 || len(artist.NameVariations) != 1 || len(artist.URLs) != 1 {
+	if err != nil || artist.ID != 1 || len(artist.Members) != 1 || len(artist.Groups) != 1 || len(artist.Aliases) != 1 {
 		t.Fatalf("artist=%+v err=%v", artist, err)
 	}
+	assertStrings(t, artist.NameVariations, "A Artist", "A. Artist")
+	assertStrings(t, artist.URLs, "https://artist.example.com/a", "https://artist.example.com/z")
 	label, err := store.Label(context.Background(), 2)
-	if err != nil || label.ParentLabel == nil || label.ParentLabel.ID != 1 || len(label.URLs) != 1 {
+	if err != nil || label.ParentLabel == nil || label.ParentLabel.ID != 1 {
 		t.Fatalf("label=%+v err=%v", label, err)
 	}
+	assertStrings(t, label.URLs, "https://label.example.com/a", "https://label.example.com/z")
 	parent, err := store.Label(context.Background(), 1)
 	if err != nil || parent.ParentLabel != nil || len(parent.Sublabels) != 1 {
 		t.Fatalf("parent=%+v err=%v", parent, err)
 	}
 	master, err := store.Master(context.Background(), 1)
-	if err != nil || master.ID != 1 || len(master.Genres) != 1 || len(master.Styles) != 1 || len(master.Artists) != 1 || len(master.Videos) != 1 {
+	if err != nil || master.ID != 1 || len(master.Artists) != 1 || len(master.Videos) != 2 {
 		t.Fatalf("master=%+v err=%v", master, err)
 	}
+	assertStrings(t, master.Genres, "Acid", "Electronic")
+	assertStrings(t, master.Styles, "Acid House", "Ambient")
+	assertStrings(
+		t,
+		[]string{value(master.Videos[0].Title), value(master.Videos[1].Title)},
+		"A Master Video",
+		"Master Video",
+	)
 	release, err := store.Release(context.Background(), 1)
-	if err != nil || release.ID != 1 || len(release.Artists) != 2 || len(release.Labels) != 1 || len(release.Companies) != 1 || len(release.Formats) != 1 || len(release.Styles) != 1 || len(release.Genres) != 1 || len(release.Videos) != 1 {
+	if err != nil || release.ID != 1 || len(release.Artists) != 2 || len(release.Labels) != 2 || len(release.Companies) != 2 || len(release.Formats) != 2 || len(release.Videos) != 2 {
 		t.Fatalf("release=%+v err=%v", release, err)
 	}
+	assertStrings(
+		t,
+		[]string{value(release.Labels[0].CategoryNotation), value(release.Labels[1].CategoryNotation)},
+		"CAT-0",
+		"CAT-1",
+	)
+	assertStrings(
+		t,
+		[]string{value(release.Companies[0].CategoryNotation), value(release.Companies[1].CategoryNotation)},
+		"Mastered By",
+		"Pressed By",
+	)
+	quantities := make(map[string]string, len(release.Formats))
+	for _, format := range release.Formats {
+		quantities[value(format.Name)] = value(format.Quantity)
+	}
+	if quantities["CD"] != testOversizedFormatQuantity || quantities["Vinyl"] != "1" {
+		t.Fatalf("release format quantities=%+v", release.Formats)
+	}
+	assertStrings(t, release.Styles, "Acid House", "Ambient")
+	assertStrings(t, release.Genres, "Acid", "Electronic")
+	assertStrings(
+		t,
+		[]string{value(release.Videos[0].Title), value(release.Videos[1].Title)},
+		"A Release Video",
+		"Release Video",
+	)
+}
+
+func assertStrings(t *testing.T, actual []string, expected ...string) {
+	t.Helper()
+	actual = slices.Clone(actual)
+	expected = slices.Clone(expected)
+	slices.Sort(actual)
+	slices.Sort(expected)
+	if !slices.Equal(actual, expected) {
+		t.Fatalf("strings=%v want=%v", actual, expected)
+	}
+}
+
+func value(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func TestStoreNotFoundAndCancellation(t *testing.T) {
@@ -249,7 +308,7 @@ func TestValidateSchemaBoundaries(t *testing.T) {
 	t.Cleanup(func() {
 		_, _ = integrationPool.Exec(context.Background(), "DROP SCHEMA IF EXISTS "+incompleteSchema+" CASCADE")
 	})
-	if err := ValidateSchema(ctx, integrationPool, incompleteSchema); err == nil || !strings.Contains(err.Error(), "missing required API tables") {
+	if err := ValidateSchema(ctx, integrationPool, incompleteSchema); err == nil || !strings.Contains(err.Error(), "missing required API relations") {
 		t.Fatalf("incomplete schema error=%v", err)
 	}
 
@@ -279,15 +338,24 @@ func TestStoreReadsSelectedCustomSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	initialMigration, err := fs.ReadFile(migrations, "V001__initial_schema.sql")
+	migrationEntries, err := fs.ReadDir(migrations, ".")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := integrationPool.Exec(ctx, "CREATE SCHEMA "+schemaName); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := integrationPool.Exec(ctx, strings.ReplaceAll(string(initialMigration), "public.", schemaName+".")); err != nil {
-		t.Fatal(err)
+	for _, migrationEntry := range migrationEntries {
+		migrationSQL, readErr := fs.ReadFile(migrations, migrationEntry.Name())
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if _, execErr := integrationPool.Exec(
+			ctx,
+			strings.ReplaceAll(string(migrationSQL), "public.", schemaName+"."),
+		); execErr != nil {
+			t.Fatalf("apply %s: %v", migrationEntry.Name(), execErr)
+		}
 	}
 
 	poolConfig, err := pgxpool.ParseConfig(integrationPool.Config().ConnString())
@@ -303,12 +371,33 @@ func TestStoreReadsSelectedCustomSchema(t *testing.T) {
 	if err := ValidateSchema(ctx, customPool, schemaName); err != nil {
 		t.Fatal(err)
 	}
+	store := New(customPool, testPublicURL, testQueryTimeout)
+	if err := store.Ready(ctx); !errors.Is(err, ErrCatalogNotReady) {
+		t.Fatalf("bootstrap readiness error=%v", err)
+	}
+	if _, err := customPool.Exec(ctx, `
+		insert into discogs_import_run (
+			manifest_sha256, status, completed_at, processor, processor_version
+		) values (repeat('a', 64), 'success', now(), 'api-test', '1');
+		update discogs_catalog_entity_state
+		set status = 'ready',
+		    operation = null,
+		    active_import_run_id = null,
+		    last_successful_import_run_id = currval('discogs_import_run_id_seq'),
+		    ready_at = now(),
+		    updated_at = now(),
+		    failure_message = null`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Ready(ctx); err != nil {
+		t.Fatalf("finalized readiness error=%v", err)
+	}
 	if _, err := customPool.Exec(ctx, `
 INSERT INTO artist (id, created_at, last_modified_at, name)
 VALUES (9001, now(), now(), 'Custom Schema Artist')`); err != nil {
 		t.Fatal(err)
 	}
-	page, err := New(customPool, testPublicURL, testQueryTimeout).SearchArtists(
+	page, err := store.SearchArtists(
 		ctx,
 		catalog.ArtistFilter{Name: "custom schema"},
 		catalog.PageRequest{Size: 20},
@@ -316,6 +405,14 @@ VALUES (9001, now(), now(), 'Custom Schema Artist')`); err != nil {
 	assertPage(t, page, 1, false, err)
 	if page.Items[0].ID != 9001 {
 		t.Fatalf("custom schema artist=%+v", page.Items[0])
+	}
+	closedPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedPool.Close()
+	if err := New(closedPool, testPublicURL, testQueryTimeout).Ready(ctx); err == nil || !strings.Contains(err.Error(), "read catalog readiness") {
+		t.Fatalf("closed pool readiness error=%v", err)
 	}
 }
 
@@ -499,26 +596,41 @@ INSERT INTO release_item (
 ) VALUES
   (1, now(), now(), 'US', 'Correct', true, true, true, true, '2000-02-03', 'Notes', DATE '2000-02-03', 'Accepted', 'Alpha Release');
 INSERT INTO master (id, created_at, last_modified_at, data_quality, title, year, main_release_id) VALUES
-  (1, now(), now(), 'Correct', 'Alpha Master', 2000, 1);
+  (1, now(), now(), 'Correct', 'Alpha Master', 2000, NULL);
 UPDATE release_item SET master_id = 1 WHERE id = 1;
+UPDATE master SET main_release_id = 1 WHERE id = 1;
 INSERT INTO genre (name) VALUES ('Electronic');
-INSERT INTO style (name) VALUES ('Ambient');
-INSERT INTO artist_member (created_at, last_modified_at, artist_id, member_id) VALUES (now(), now(), 1, 2);
-INSERT INTO artist_group (created_at, last_modified_at, artist_id, group_id) VALUES (now(), now(), 1, 3);
-INSERT INTO artist_alias (created_at, last_modified_at, artist_id, alias_id) VALUES (now(), now(), 1, 4);
-INSERT INTO artist_name_variation (created_at, last_modified_at, hash, name_variation, artist_id) VALUES (now(), now(), 1, 'A. Artist', 1);
-INSERT INTO artist_url (created_at, last_modified_at, hash, url, artist_id) VALUES (now(), now(), 1, 'https://artist.example.com', 1);
-INSERT INTO label_sub_label (created_at, last_modified_at, parent_label_id, sub_label_id) VALUES (now(), now(), 1, 2);
-INSERT INTO label_url (created_at, last_modified_at, hash, url, label_id) VALUES (now(), now(), 1, 'https://label.example.com', 2);
-INSERT INTO master_artist (created_at, last_modified_at, artist_id, master_id) VALUES (now(), now(), 1, 1);
-INSERT INTO master_genre (created_at, last_modified_at, genre, master_id) VALUES (now(), now(), 'Electronic', 1);
-INSERT INTO master_style (created_at, last_modified_at, master_id, style) VALUES (now(), now(), 1, 'Ambient');
-INSERT INTO master_video (created_at, last_modified_at, hash, description, title, url, master_id) VALUES (now(), now(), 1, 'Video', 'Master Video', 'https://video.example.com/master', 1);
-INSERT INTO release_item_artist (created_at, last_modified_at, artist_id, release_item_id) VALUES (now(), now(), 1, 1);
-INSERT INTO release_item_credited_artist (created_at, last_modified_at, hash, role, artist_id, release_item_id) VALUES (now(), now(), 1, 'Producer', 2, 1);
-INSERT INTO label_release_item (created_at, last_modified_at, category_notation, label_id, release_item_id) VALUES (now(), now(), 'CAT-1', 1, 1);
-INSERT INTO release_item_work (created_at, last_modified_at, hash, work, label_id, release_item_id) VALUES (now(), now(), 1, 'Pressed By', 2, 1);
-INSERT INTO release_item_format (created_at, last_modified_at, hash, description, name, quantity, text, release_item_id) VALUES (now(), now(), 1, 'Album,Limited Edition', 'Vinyl', 1, NULL, 1);
-INSERT INTO release_item_style (created_at, last_modified_at, release_item_id, style) VALUES (now(), now(), 1, 'Ambient');
-INSERT INTO release_item_genre (created_at, last_modified_at, genre, release_item_id) VALUES (now(), now(), 'Electronic', 1);
-INSERT INTO release_item_video (created_at, last_modified_at, hash, description, title, url, release_item_id) VALUES (now(), now(), 1, 'Video', 'Release Video', 'https://video.example.com/release', 1);`
+INSERT INTO genre (name) VALUES ('Acid');
+INSERT INTO style (name) VALUES ('Ambient'), ('Acid House');
+INSERT INTO artist_member (last_modified_at, artist_id, member_id) VALUES (now(), 1, 2);
+INSERT INTO artist_group (last_modified_at, artist_id, group_id) VALUES (now(), 1, 3);
+INSERT INTO artist_alias (last_modified_at, artist_id, alias_id) VALUES (now(), 1, 4);
+INSERT INTO artist_name_variation (last_modified_at, hash, name_variation, artist_id) VALUES (now(), 1, 'A. Artist', 1);
+INSERT INTO artist_name_variation (last_modified_at, hash, name_variation, artist_id) VALUES (now(), 2, 'A Artist', 1);
+INSERT INTO artist_url (last_modified_at, hash, url, artist_id) VALUES (now(), 1, 'https://artist.example.com/z', 1);
+INSERT INTO artist_url (last_modified_at, hash, url, artist_id) VALUES (now(), 2, 'https://artist.example.com/a', 1);
+INSERT INTO label_sub_label (last_modified_at, parent_label_id, sub_label_id) VALUES (now(), 1, 2);
+INSERT INTO label_url (last_modified_at, hash, url, label_id) VALUES (now(), 1, 'https://label.example.com/z', 2);
+INSERT INTO label_url (last_modified_at, hash, url, label_id) VALUES (now(), 2, 'https://label.example.com/a', 2);
+INSERT INTO master_artist (last_modified_at, artist_id, master_id) VALUES (now(), 1, 1);
+INSERT INTO master_genre (last_modified_at, genre, master_id) VALUES (now(), 'Electronic', 1);
+INSERT INTO master_genre (last_modified_at, genre, master_id) VALUES (now(), 'Acid', 1);
+INSERT INTO master_style (last_modified_at, master_id, style) VALUES (now(), 1, 'Ambient');
+INSERT INTO master_style (last_modified_at, master_id, style) VALUES (now(), 1, 'Acid House');
+INSERT INTO master_video (last_modified_at, hash, description, title, url, master_id) VALUES (now(), 1, 'Video', 'Master Video', 'https://video.example.com/master', 1);
+INSERT INTO master_video (last_modified_at, hash, description, title, url, master_id) VALUES (now(), 2, 'Video', 'A Master Video', 'https://video.example.com/a-master', 1);
+INSERT INTO release_item_artist (last_modified_at, artist_id, release_item_id) VALUES (now(), 1, 1);
+INSERT INTO release_item_credited_artist (last_modified_at, hash, role, artist_id, release_item_id) VALUES (now(), 1, 'Producer', 2, 1);
+INSERT INTO release_item_credited_artist (last_modified_at, hash, role, artist_id, release_item_id) VALUES (now(), 2, 'Producer', 1, 1);
+INSERT INTO label_release_item (last_modified_at, category_notation, label_id, release_item_id) VALUES (now(), 'CAT-1', 1, 1);
+INSERT INTO label_release_item (last_modified_at, category_notation, label_id, release_item_id) VALUES (now(), 'CAT-0', 1, 1);
+INSERT INTO release_item_work (last_modified_at, hash, work, label_id, release_item_id) VALUES (now(), 1, 'Pressed By', 2, 1);
+INSERT INTO release_item_work (last_modified_at, hash, work, label_id, release_item_id) VALUES (now(), 2, 'Mastered By', 2, 1);
+INSERT INTO release_item_format (last_modified_at, hash, description, name, quantity, quantity_text, text, release_item_id) VALUES (now(), 1, 'Album,Limited Edition', 'Vinyl', 1, '1', NULL, 1);
+INSERT INTO release_item_format (last_modified_at, hash, description, name, quantity, quantity_text, text, release_item_id) VALUES (now(), 2, 'Album', 'CD', NULL, '1010487400000000000000000000000000000000000000000000', NULL, 1);
+INSERT INTO release_item_style (last_modified_at, release_item_id, style) VALUES (now(), 1, 'Ambient');
+INSERT INTO release_item_style (last_modified_at, release_item_id, style) VALUES (now(), 1, 'Acid House');
+INSERT INTO release_item_genre (last_modified_at, genre, release_item_id) VALUES (now(), 'Electronic', 1);
+INSERT INTO release_item_genre (last_modified_at, genre, release_item_id) VALUES (now(), 'Acid', 1);
+INSERT INTO release_item_video (last_modified_at, hash, description, title, url, release_item_id) VALUES (now(), 1, 'Video', 'Release Video', 'https://video.example.com/release', 1);
+INSERT INTO release_item_video (last_modified_at, hash, description, title, url, release_item_id) VALUES (now(), 2, 'Video', 'A Release Video', 'https://video.example.com/a-release', 1);`

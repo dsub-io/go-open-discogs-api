@@ -56,4 +56,4 @@ type checkerStub struct {
 	err error
 }
 
-func (c checkerStub) Ping(context.Context) error { return c.err }
+func (c checkerStub) Ready(context.Context) error { return c.err }

@@ -162,6 +162,43 @@ docker run \
   --env API_METRICS_ENABLED=false \
   "$image" >/dev/null
 
+listener_started=false
+attempt=0
+while [ "$attempt" -lt 100 ]; do
+  if docker logs "$api_container" 2>&1 | grep -q 'HTTP listener started'; then
+    listener_started=true
+    break
+  fi
+  attempt=$((attempt + 1))
+  sleep 0.1
+done
+if [ "$listener_started" = false ]; then
+  docker logs "$api_container" >&2
+  printf 'API management listener did not start.\n' >&2
+  exit 1
+fi
+if docker exec "$api_container" \
+  /go-open-discogs-api --healthcheck >/dev/null 2>&1; then
+  printf 'Readiness probe succeeded before catalog bootstrap finalization.\n' >&2
+  exit 1
+fi
+
+docker exec "$database_container" \
+  psql --set ON_ERROR_STOP=1 --username discogs --dbname discogs \
+  --command "
+    insert into discogs_import_run (
+      manifest_sha256, status, completed_at, processor, processor_version
+    ) values (repeat('a', 64), 'success', now(), 'readiness-test', '1');
+    update discogs_catalog_entity_state
+    set status = 'ready',
+        operation = null,
+        active_import_run_id = null,
+        last_successful_import_run_id = currval('discogs_import_run_id_seq'),
+        ready_at = now(),
+        updated_at = now(),
+        failure_message = null;
+  " >/dev/null
+
 ready=false
 attempt=0
 while [ "$attempt" -lt 100 ]; do

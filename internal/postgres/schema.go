@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const requiredAPITableNames = "artist,artist_alias,artist_group,artist_member,artist_name_variation,artist_url,label,label_release_item,label_sub_label,label_url,master,master_artist,master_genre,master_style,master_video,release_item,release_item_artist,release_item_credited_artist,release_item_format,release_item_genre,release_item_style,release_item_video,release_item_work"
+const requiredAPIRelationNames = "artist,artist_alias,artist_group,artist_member,artist_name_variation,artist_url,discogs_catalog_readiness,label,label_release_item,label_sub_label,label_url,master,master_artist,master_genre,master_style,master_video,release_item,release_item_artist,release_item_credited_artist,release_item_format,release_item_genre,release_item_style,release_item_video,release_item_work"
 
 const validateSchemaQuery = `
 WITH schema_presence AS (
@@ -53,7 +53,7 @@ type schemaState struct {
 // ValidateSchema verifies the complete read schema without creating or migrating database objects.
 func ValidateSchema(ctx context.Context, pool *pgxpool.Pool, schemaName string) error {
 	var state schemaState
-	if err := pool.QueryRow(ctx, validateSchemaQuery, schemaName, requiredAPITableNames).Scan(
+	if err := pool.QueryRow(ctx, validateSchemaQuery, schemaName, requiredAPIRelationNames).Scan(
 		&state.exists,
 		&state.canUse,
 		&state.missingTables,
@@ -69,14 +69,14 @@ func ValidateSchema(ctx context.Context, pool *pgxpool.Pool, schemaName string) 
 	}
 	if len(state.missingTables) > 0 {
 		return fmt.Errorf(
-			"database schema %s is missing required API tables: %s; run an OpenDiscogs batch importer first",
+			"database schema %s is missing required API relations: %s; run an OpenDiscogs batch importer first",
 			schemaName,
 			strings.Join(state.missingTables, ", "),
 		)
 	}
 	if len(state.unreadableTables) > 0 {
 		return fmt.Errorf(
-			"current user requires SELECT on database schema %s tables: %s",
+			"current user requires SELECT on database schema %s relations: %s",
 			schemaName,
 			strings.Join(state.unreadableTables, ", "),
 		)
