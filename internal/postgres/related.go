@@ -102,12 +102,18 @@ ORDER BY r.id
 `
 
 	masterReleasesSQL = `SELECT r.id::bigint, r.title,
-  array_agg(a.name ORDER BY a.id),
-  array_agg(a.id::bigint ORDER BY a.id),
+  COALESCE(
+    array_agg(a.name ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL),
+    ARRAY[]::text[]
+  ),
+  COALESCE(
+    array_agg(a.id::bigint ORDER BY a.id) FILTER (WHERE a.id IS NOT NULL),
+    ARRAY[]::bigint[]
+  ),
   CASE WHEN r.has_valid_year THEN extract(year FROM r.release_date)::integer END
 FROM release_item r
-JOIN release_item_artist release_artist ON r.id = release_artist.release_item_id
-JOIN artist a ON a.id = release_artist.artist_id
+LEFT JOIN release_item_artist release_artist ON r.id = release_artist.release_item_id
+LEFT JOIN artist a ON a.id = release_artist.artist_id
 WHERE r.master_id = $1
   AND r.id > $2
 GROUP BY r.id

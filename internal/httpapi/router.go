@@ -49,6 +49,7 @@ func (r *Router) Handler() http.Handler {
 	labelHandler := NewLabelHandler(r.repository, r.responder)
 	masterHandler := NewMasterHandler(r.repository, r.responder)
 	releaseHandler := NewReleaseHandler(r.repository, r.responder)
+	snapshotHandler := NewSnapshotHandler(r.repository, r.responder)
 	documentationHandler := NewDocumentationHandler(r.responder)
 
 	r.handle(mux, RouteArtists, artistHandler.Search)
@@ -62,6 +63,9 @@ func (r *Router) Handler() http.Handler {
 	r.handle(mux, RouteMasterRelease, masterHandler.Releases)
 	r.handle(mux, RouteReleases, releaseHandler.Search)
 	r.handle(mux, RouteRelease, releaseHandler.Get)
+	r.handle(mux, RouteReleaseTracks, releaseHandler.Tracks)
+	r.handle(mux, RouteReleaseIdentifiers, releaseHandler.Identifiers)
+	r.handle(mux, RouteSnapshot, snapshotHandler.Get)
 	r.handle(mux, RouteOpenAPI, documentationHandler.OpenAPI)
 	r.handle(mux, RouteOpenAPIJSON, documentationHandler.OpenAPI)
 	r.handle(mux, RouteVersion, r.version)

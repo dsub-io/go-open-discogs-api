@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var ErrNotFound = errors.New("resource not found")
@@ -27,6 +28,40 @@ type PageItem interface {
 type Page[T PageItem] struct {
 	Items   []T
 	HasMore bool
+}
+
+type HashPageRequest struct {
+	AfterHash *int32
+	Size      int
+}
+
+func (p HashPageRequest) FetchSize() int {
+	return p.Size + 1
+}
+
+type HashPageItem interface {
+	pageHash() int32
+}
+
+type HashPage[T HashPageItem] struct {
+	Items   []T
+	HasMore bool
+}
+
+func NewHashPage[T HashPageItem](items []T, requestedSize int) HashPage[T] {
+	hasMore := len(items) > requestedSize
+	if hasMore {
+		items = items[:requestedSize]
+	}
+	return HashPage[T]{Items: items, HasMore: hasMore}
+}
+
+func (p HashPage[T]) NextAfterHash() *int32 {
+	if !p.HasMore || len(p.Items) == 0 {
+		return nil
+	}
+	next := p.Items[len(p.Items)-1].pageHash()
+	return &next
 }
 
 func NewPage[T PageItem](items []T, requestedSize int) Page[T] {
@@ -67,6 +102,20 @@ type ReleaseFilter struct {
 	Master  *bool
 }
 
+type CatalogNumberLookup struct {
+	LabelID       int64
+	CatalogNumber string
+}
+
+type IdentifierLookup struct {
+	Type  string
+	Value string
+}
+
+type SnapshotReader interface {
+	Snapshot(context.Context) (CatalogSnapshot, error)
+}
+
 type ArtistReader interface {
 	SearchArtists(context.Context, ArtistFilter, PageRequest) (Page[Artist], error)
 	Artist(context.Context, int64) (ArtistDetail, error)
@@ -87,14 +136,35 @@ type MasterReader interface {
 
 type ReleaseReader interface {
 	SearchReleases(context.Context, ReleaseFilter, PageRequest) (Page[Release], error)
+	ReleasesByCatalogNumber(context.Context, CatalogNumberLookup, PageRequest) (Page[Release], error)
+	ReleasesByIdentifier(context.Context, IdentifierLookup, PageRequest) (Page[Release], error)
 	Release(context.Context, int64) (ReleaseDetail, error)
+	ReleaseTracks(context.Context, int64, HashPageRequest) (HashPage[ReleaseTrack], error)
+	ReleaseIdentifiers(context.Context, int64, HashPageRequest) (HashPage[ReleaseIdentifier], error)
 }
 
 type Repository interface {
+	SnapshotReader
 	ArtistReader
 	LabelReader
 	MasterReader
 	ReleaseReader
+}
+
+type CatalogSnapshot struct {
+	Ready     bool             `json:"ready"`
+	Status    string           `json:"status"`
+	UpdatedAt time.Time        `json:"updated_at"`
+	Entities  []SnapshotEntity `json:"entities"`
+}
+
+type SnapshotEntity struct {
+	EntityType       string     `json:"entity_type"`
+	Status           string     `json:"status"`
+	DumpDate         *string    `json:"dump_date"`
+	AppliedAt        *time.Time `json:"applied_at"`
+	Processor        *string    `json:"processor"`
+	ProcessorVersion *string    `json:"processor_version"`
 }
 
 type Artist struct {
@@ -260,6 +330,24 @@ type ReleaseVideo struct {
 	URL         *string `json:"url"`
 	Description *string `json:"description"`
 }
+
+type ReleaseTrack struct {
+	Hash     int32   `json:"-"`
+	Duration *string `json:"duration"`
+	Position *string `json:"position"`
+	Title    *string `json:"title"`
+}
+
+func (item ReleaseTrack) pageHash() int32 { return item.Hash }
+
+type ReleaseIdentifier struct {
+	Hash        int32   `json:"-"`
+	Description *string `json:"description"`
+	Type        *string `json:"type"`
+	Value       *string `json:"value"`
+}
+
+func (item ReleaseIdentifier) pageHash() int32 { return item.Hash }
 
 type ReleaseDetail struct {
 	Release

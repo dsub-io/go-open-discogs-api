@@ -10,6 +10,12 @@ import (
 )
 
 const (
+	releaseColumnsSQL = `r.id::bigint, r.title, r.country, r.data_quality,
+  CASE WHEN r.has_valid_year THEN extract(year FROM r.release_date)::integer END,
+  CASE WHEN r.has_valid_month THEN extract(month FROM r.release_date)::integer END,
+  CASE WHEN r.has_valid_day THEN extract(day FROM r.release_date)::integer END,
+  r.listed_release_date, r.is_master, r.master_id::bigint, r.notes, r.status`
+
 	searchArtistsSQL = `WITH params AS (
   SELECT $1::text AS name, $2::text AS real_name
 )
@@ -49,11 +55,7 @@ LIMIT $4`
   SELECT $1::text AS title, $2::text AS country, $3::date AS start_date,
          $4::date AS end_date, $5::integer AS release_month, $6::boolean AS is_master
 )
-SELECT r.id::bigint, r.title, r.country, r.data_quality,
-  CASE WHEN r.has_valid_year THEN extract(year FROM r.release_date)::integer END,
-  CASE WHEN r.has_valid_month THEN extract(month FROM r.release_date)::integer END,
-  CASE WHEN r.has_valid_day THEN extract(day FROM r.release_date)::integer END,
-  r.listed_release_date, r.is_master, r.master_id::bigint, r.notes, r.status
+SELECT ` + releaseColumnsSQL + `
 FROM release_item r
 CROSS JOIN params p
 WHERE (p.title IS NULL OR r.title ILIKE '%' || p.title || '%')

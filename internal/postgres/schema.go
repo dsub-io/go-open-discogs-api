@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const requiredAPIRelationNames = "artist,artist_alias,artist_group,artist_member,artist_name_variation,artist_url,discogs_catalog_readiness,label,label_release_item,label_sub_label,label_url,master,master_artist,master_genre,master_style,master_video,release_item,release_item_artist,release_item_credited_artist,release_item_format,release_item_genre,release_item_style,release_item_video,release_item_work"
+const requiredAPIRelationNames = "artist,artist_alias,artist_group,artist_member,artist_name_variation,artist_url,discogs_catalog_entity_state,discogs_catalog_readiness,discogs_import_checkpoint,label,label_release_item,label_sub_label,label_url,master,master_artist,master_genre,master_style,master_video,release_item,release_item_artist,release_item_credited_artist,release_item_format,release_item_genre,release_item_identifier,release_item_style,release_item_track,release_item_video,release_item_work"
 
 const validateSchemaQuery = `
 WITH schema_presence AS (

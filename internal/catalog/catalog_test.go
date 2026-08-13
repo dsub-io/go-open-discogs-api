@@ -25,6 +25,24 @@ func TestCursorPageConstruction(t *testing.T) {
 	assertCursorItem(t, Release{ID: 6}, 6)
 }
 
+func TestHashCursorPageConstruction(t *testing.T) {
+	t.Parallel()
+	afterHash := int32(-20)
+	request := HashPageRequest{AfterHash: &afterHash, Size: 20}
+	if request.FetchSize() != 21 {
+		t.Fatalf("fetch size=%d", request.FetchSize())
+	}
+	page := NewHashPage([]ReleaseTrack{{Hash: -10}, {Hash: 20}}, 1)
+	next := page.NextAfterHash()
+	if !page.HasMore || len(page.Items) != 1 || next == nil || *next != -10 {
+		t.Fatalf("page=%+v next=%v", page, next)
+	}
+	final := NewHashPage([]ReleaseIdentifier{{Hash: 20}}, 1)
+	if final.HasMore || final.NextAfterHash() != nil {
+		t.Fatalf("final page=%+v", final)
+	}
+}
+
 func assertCursorItem[T PageItem](t *testing.T, item T, expectedID int64) {
 	t.Helper()
 	page := NewPage([]T{item, item}, 1)

@@ -51,6 +51,8 @@ func (s *Store) Ready(ctx context.Context) error {
 
 type itemLoader[T catalog.PageItem] func(context.Context) ([]T, error)
 
+type hashItemLoader[T catalog.HashPageItem] func(context.Context) ([]T, error)
+
 func loadPage[T catalog.PageItem](
 	ctx context.Context,
 	requestedSize int,
@@ -61,6 +63,18 @@ func loadPage[T catalog.PageItem](
 		return catalog.Page[T]{}, err
 	}
 	return catalog.NewPage(items, requestedSize), nil
+}
+
+func loadHashPage[T catalog.HashPageItem](
+	ctx context.Context,
+	requestedSize int,
+	loadItems hashItemLoader[T],
+) (catalog.HashPage[T], error) {
+	items, err := loadItems(ctx)
+	if err != nil {
+		return catalog.HashPage[T]{}, err
+	}
+	return catalog.NewHashPage(items, requestedSize), nil
 }
 
 func notFound(err error) error {

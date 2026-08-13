@@ -71,6 +71,24 @@ func TestStoreSearchAndRelatedQueries(t *testing.T) {
 	assertPage(t, masters, 1, false, err)
 	releases, err := store.SearchReleases(context.Background(), catalog.ReleaseFilter{Title: "release", Country: "us", Year: intPointer(2000), Month: intPointer(2), Master: boolPointer(true)}, request)
 	assertPage(t, releases, 1, false, err)
+	catalogReleases, err := store.ReleasesByCatalogNumber(
+		context.Background(),
+		catalog.CatalogNumberLookup{LabelID: 1, CatalogNumber: "CAT-1"},
+		request,
+	)
+	assertPage(t, catalogReleases, 1, false, err)
+	identifierReleases, err := store.ReleasesByIdentifier(
+		context.Background(),
+		catalog.IdentifierLookup{Type: "barcode", Value: "1234"},
+		request,
+	)
+	assertPage(t, identifierReleases, 1, false, err)
+	identifierReleases, err = store.ReleasesByIdentifier(
+		context.Background(),
+		catalog.IdentifierLookup{Type: "Barcode", Value: "1234 "},
+		request,
+	)
+	assertPage(t, identifierReleases, 0, false, err)
 
 	artistReleases, err := store.ArtistReleases(context.Background(), 1, request)
 	assertPage(t, artistReleases, 1, false, err)
@@ -81,7 +99,10 @@ func TestStoreSearchAndRelatedQueries(t *testing.T) {
 	assertPage(t, labelReleases, 1, false, err)
 	assertStrings(t, labelReleases.Items[0].CatalogNumbers, "CAT-0", "CAT-1")
 	masterReleases, err := store.MasterReleases(context.Background(), 1, request)
-	assertPage(t, masterReleases, 1, false, err)
+	assertPage(t, masterReleases, 2, false, err)
+	if len(masterReleases.Items[1].ArtistIDs) != 0 || len(masterReleases.Items[1].Artists) != 0 {
+		t.Fatalf("artist-free master release=%+v", masterReleases.Items[1])
+	}
 
 	first, err := store.SearchArtists(context.Background(), catalog.ArtistFilter{}, catalog.PageRequest{Size: 1})
 	assertPage(t, first, 1, true, err)
@@ -97,6 +118,58 @@ func TestStoreSearchAndRelatedQueries(t *testing.T) {
 	assertPage(t, second, 1, true, err)
 	if second.Items[0].ID != 2 {
 		t.Fatalf("second page=%+v", second)
+	}
+}
+
+func TestStoreSnapshotAndReleaseChildQueries(t *testing.T) {
+	t.Parallel()
+	store := New(integrationPool, testPublicURL, testQueryTimeout)
+	snapshot, err := store.Snapshot(context.Background())
+	if err != nil || !snapshot.Ready || snapshot.Status != "ready" || len(snapshot.Entities) != 4 {
+		t.Fatalf("snapshot=%+v err=%v", snapshot, err)
+	}
+	for _, entity := range snapshot.Entities {
+		if entity.DumpDate == nil || *entity.DumpDate != "2026-08-01" || entity.AppliedAt == nil ||
+			value(entity.Processor) != "go-open-discogs-batch" || value(entity.ProcessorVersion) != "test" {
+			t.Fatalf("snapshot entity=%+v", entity)
+		}
+	}
+
+	firstTracks, err := store.ReleaseTracks(
+		context.Background(), 1, catalog.HashPageRequest{Size: 1},
+	)
+	assertHashPage(t, firstTracks, 1, true, err)
+	afterTrack := firstTracks.NextAfterHash()
+	if afterTrack == nil {
+		t.Fatal("track cursor is nil")
+	}
+	secondTracks, err := store.ReleaseTracks(
+		context.Background(), 1, catalog.HashPageRequest{AfterHash: afterTrack, Size: 1},
+	)
+	assertHashPage(t, secondTracks, 1, false, err)
+
+	firstIdentifiers, err := store.ReleaseIdentifiers(
+		context.Background(), 1, catalog.HashPageRequest{Size: 1},
+	)
+	assertHashPage(t, firstIdentifiers, 1, true, err)
+	afterIdentifier := firstIdentifiers.NextAfterHash()
+	if afterIdentifier == nil {
+		t.Fatal("identifier cursor is nil")
+	}
+	secondIdentifiers, err := store.ReleaseIdentifiers(
+		context.Background(), 1, catalog.HashPageRequest{AfterHash: afterIdentifier, Size: 1},
+	)
+	assertHashPage(t, secondIdentifiers, 1, false, err)
+
+	emptyTracks, err := store.ReleaseTracks(context.Background(), 2, catalog.HashPageRequest{Size: 1})
+	assertHashPage(t, emptyTracks, 0, false, err)
+	emptyIdentifiers, err := store.ReleaseIdentifiers(context.Background(), 2, catalog.HashPageRequest{Size: 1})
+	assertHashPage(t, emptyIdentifiers, 0, false, err)
+	if _, err := store.ReleaseTracks(context.Background(), 999, catalog.HashPageRequest{Size: 1}); !errors.Is(err, catalog.ErrNotFound) {
+		t.Fatalf("missing release track error=%v", err)
+	}
+	if _, err := store.ReleaseIdentifiers(context.Background(), 999, catalog.HashPageRequest{Size: 1}); !errors.Is(err, catalog.ErrNotFound) {
+		t.Fatalf("missing release identifier error=%v", err)
 	}
 }
 
@@ -233,6 +306,20 @@ func TestStoreHelpers(t *testing.T) {
 	if !errors.Is(err, errRepositoryTest) {
 		t.Fatalf("item loader error=%v", err)
 	}
+	hashPage, err := loadHashPage(context.Background(), 1,
+		func(context.Context) ([]catalog.ReleaseTrack, error) {
+			return []catalog.ReleaseTrack{{Hash: 1}, {Hash: 2}}, nil
+		},
+	)
+	if err != nil || !hashPage.HasMore || len(hashPage.Items) != 1 {
+		t.Fatalf("hash page=%+v err=%v", hashPage, err)
+	}
+	_, err = loadHashPage(context.Background(), 1,
+		func(context.Context) ([]catalog.ReleaseTrack, error) { return nil, errRepositoryTest },
+	)
+	if !errors.Is(err, errRepositoryTest) {
+		t.Fatalf("hash item loader error=%v", err)
+	}
 
 	rows, err := integrationPool.Query(context.Background(), "SELECT 1::bigint")
 	if err != nil {
@@ -240,6 +327,30 @@ func TestStoreHelpers(t *testing.T) {
 	}
 	if _, err := collectRows(rows, queryArtistsError, scanArtist); err == nil {
 		t.Fatal("invalid row shape was accepted")
+	}
+	rows, err = integrationPool.Query(context.Background(), "SELECT 1::bigint")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collectHashRows(rows, queryReleaseTracksError, scanReleaseTrack); err == nil {
+		t.Fatal("invalid hash row shape was accepted")
+	}
+	rows, err = integrationPool.Query(context.Background(), "SELECT 1::bigint")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collectSnapshot(rows); err == nil {
+		t.Fatal("invalid snapshot row shape was accepted")
+	}
+	rows, err = integrationPool.Query(context.Background(), `
+SELECT false::boolean, ''::text, now(), ''::text, ''::text,
+       NULL::text, NULL::timestamp, NULL::text, NULL::text
+WHERE false`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collectSnapshot(rows); err == nil || !strings.Contains(err.Error(), "canonical catalog state is empty") {
+		t.Fatalf("empty snapshot error=%v", err)
 	}
 }
 
@@ -275,9 +386,30 @@ func TestStoreQueryErrorsFromClosedPool(t *testing.T) {
 			_, err := store.SearchReleases(context.Background(), catalog.ReleaseFilter{}, request)
 			return err
 		}},
+		{"releases by catalog number", func() error {
+			_, err := store.ReleasesByCatalogNumber(
+				context.Background(), catalog.CatalogNumberLookup{LabelID: 1, CatalogNumber: "CAT-1"}, request,
+			)
+			return err
+		}},
+		{"releases by identifier", func() error {
+			_, err := store.ReleasesByIdentifier(
+				context.Background(), catalog.IdentifierLookup{Type: "Barcode", Value: "1234"}, request,
+			)
+			return err
+		}},
 		{"artist releases", func() error { _, err := store.ArtistReleases(context.Background(), 1, request); return err }},
 		{"label releases", func() error { _, err := store.LabelReleases(context.Background(), 1, request); return err }},
 		{"master releases", func() error { _, err := store.MasterReleases(context.Background(), 1, request); return err }},
+		{"release tracks", func() error {
+			_, err := store.ReleaseTracks(context.Background(), 1, catalog.HashPageRequest{Size: 1})
+			return err
+		}},
+		{"release identifiers", func() error {
+			_, err := store.ReleaseIdentifiers(context.Background(), 1, catalog.HashPageRequest{Size: 1})
+			return err
+		}},
+		{"snapshot", func() error { _, err := store.Snapshot(context.Background()); return err }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -285,6 +417,9 @@ func TestStoreQueryErrorsFromClosedPool(t *testing.T) {
 				t.Fatal("closed pool query succeeded")
 			}
 		})
+	}
+	if err := store.requireRelease(context.Background(), 1); err == nil {
+		t.Fatal("closed pool release existence query succeeded")
 	}
 }
 
@@ -521,6 +656,13 @@ func assertPage[T catalog.PageItem](t *testing.T, page catalog.Page[T], itemCoun
 	}
 }
 
+func assertHashPage[T catalog.HashPageItem](t *testing.T, page catalog.HashPage[T], itemCount int, hasMore bool, err error) {
+	t.Helper()
+	if err != nil || len(page.Items) != itemCount || page.HasMore != hasMore {
+		t.Fatalf("hash page=%+v err=%v", page, err)
+	}
+}
+
 func intPointer(value int) *int { return &value }
 
 func boolPointer(value bool) *bool { return &value }
@@ -578,7 +720,8 @@ func ensureCanonicalTestSchema(ctx context.Context, pool *pgxpool.Pool) error {
 
 const resetSQL = `
 TRUNCATE TABLE
-  artist, label, master, release_item, genre, style
+  artist, label, master, release_item, genre, style,
+  discogs_catalog_entity_state, discogs_import_run, discogs_dump
 RESTART IDENTITY CASCADE`
 
 const seedSQL = `
@@ -594,10 +737,12 @@ INSERT INTO release_item (
   id, created_at, last_modified_at, country, data_quality, has_valid_day, has_valid_month,
   has_valid_year, is_master, listed_release_date, notes, release_date, status, title
 ) VALUES
-  (1, now(), now(), 'US', 'Correct', true, true, true, true, '2000-02-03', 'Notes', DATE '2000-02-03', 'Accepted', 'Alpha Release');
+  (1, now(), now(), 'US', 'Correct', true, true, true, true, '2000-02-03', 'Notes', DATE '2000-02-03', 'Accepted', 'Alpha Release'),
+  (2, now(), now(), 'KR', 'Correct', false, false, true, false, '2001', NULL, DATE '2001-01-01', 'Accepted', 'Artist-free Release');
 INSERT INTO master (id, created_at, last_modified_at, data_quality, title, year, main_release_id) VALUES
   (1, now(), now(), 'Correct', 'Alpha Master', 2000, NULL);
 UPDATE release_item SET master_id = 1 WHERE id = 1;
+UPDATE release_item SET master_id = 1 WHERE id = 2;
 UPDATE master SET main_release_id = 1 WHERE id = 1;
 INSERT INTO genre (name) VALUES ('Electronic');
 INSERT INTO genre (name) VALUES ('Acid');
@@ -633,4 +778,33 @@ INSERT INTO release_item_style (last_modified_at, release_item_id, style) VALUES
 INSERT INTO release_item_genre (last_modified_at, genre, release_item_id) VALUES (now(), 'Electronic', 1);
 INSERT INTO release_item_genre (last_modified_at, genre, release_item_id) VALUES (now(), 'Acid', 1);
 INSERT INTO release_item_video (last_modified_at, hash, description, title, url, release_item_id) VALUES (now(), 1, 'Video', 'Release Video', 'https://video.example.com/release', 1);
-INSERT INTO release_item_video (last_modified_at, hash, description, title, url, release_item_id) VALUES (now(), 2, 'Video', 'A Release Video', 'https://video.example.com/a-release', 1);`
+INSERT INTO release_item_video (last_modified_at, hash, description, title, url, release_item_id) VALUES (now(), 2, 'Video', 'A Release Video', 'https://video.example.com/a-release', 1);
+INSERT INTO release_item_track (last_modified_at, hash, duration, position, title, release_item_id) VALUES
+  (now(), -2, '03:00', 'A1', 'First Track', 1),
+  (now(), 5, '04:00', 'A2', 'Second Track', 1);
+INSERT INTO release_item_identifier (last_modified_at, hash, description, type, value, release_item_id) VALUES
+  (now(), -3, 'Primary', 'Barcode', '1234', 1),
+  (now(), 7, 'Alternate', 'Barcode', '1234', 1);
+INSERT INTO discogs_import_run (
+  completed_at, manifest_sha256, status, processor, processor_version
+) VALUES (now(), repeat('a', 64), 'success', 'go-open-discogs-batch', 'test');
+INSERT INTO discogs_dump (
+  etag, dump_date, entity_type, checksum_sha256, size_bytes, uri
+)
+SELECT
+  'etag-' || entity_type, DATE '2026-08-01', entity_type,
+  repeat('a', 64), 1, entity_type || '.xml.gz'
+FROM (VALUES ('artist'), ('label'), ('master'), ('release')) entity(entity_type);
+INSERT INTO discogs_import_run_dump (
+  import_run_id, entity_type, dump_id, import_contract_revision
+)
+SELECT currval('discogs_import_run_id_seq'), entity_type, id, 1
+FROM discogs_dump;
+INSERT INTO discogs_catalog_entity_state (
+  entity_type, status, operation, active_import_run_id,
+  last_successful_import_run_id, ready_at, updated_at, failure_message
+)
+SELECT
+  entity_type, 'ready', NULL, NULL, currval('discogs_import_run_id_seq'),
+  now(), now(), NULL
+FROM (VALUES ('artist'), ('label'), ('master'), ('release')) entity(entity_type);`
