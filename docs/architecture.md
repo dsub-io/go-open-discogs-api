@@ -17,6 +17,16 @@ limited to fields covered by canonical `open-discogs-model` indexes; profile,
 contact, and notes text are read-only response fields rather than scan-based
 filters.
 
-Public and management listeners are separate. Liveness checks only the process. Readiness performs a bounded PostgreSQL ping. Prometheus is pull-based and local. OTLP tracing is opt-in and does not exist at runtime when disabled.
+Nested relation collections are unordered and do not expose PostgreSQL row
+order as part of the API contract. Root collection cursors continue to use the
+Discogs resource ID.
+Release format quantities are served from canonical decimal text rather than
+the compatibility integer column.
+
+Public and management listeners are separate. Liveness checks only the process.
+Readiness performs a bounded canonical catalog-state query, which also verifies
+PostgreSQL connectivity, and remains down until bootstrap finalization commits.
+Prometheus is pull-based and local. OTLP tracing is opt-in and does not exist at
+runtime when disabled.
 
 CPU and Go memory limits are optional: unset or zero means no application limit, negative values are rejected, and positive values are applied as configured. The Go memory value is a soft runtime limit. The database connection limit remains a production-safe finite value because it protects shared database capacity. The service does not derive any of these values from a percentage of CPU cores.

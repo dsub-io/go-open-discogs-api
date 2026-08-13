@@ -17,7 +17,7 @@ SELECT a.id::bigint, a.name, a.real_name, a.profile, a.data_quality,
       'id', related.id::bigint,
       'name', related.name,
       'resource_url', $2 || '/artists/' || related.id
-    ) ORDER BY related.id)
+    ))
     FROM artist_member relation
     JOIN artist related ON related.id = relation.member_id
     WHERE relation.artist_id = a.id
@@ -27,7 +27,7 @@ SELECT a.id::bigint, a.name, a.real_name, a.profile, a.data_quality,
       'id', related.id::bigint,
       'name', related.name,
       'resource_url', $2 || '/artists/' || related.id
-    ) ORDER BY related.id)
+    ))
     FROM artist_group relation
     JOIN artist related ON related.id = relation.group_id
     WHERE relation.artist_id = a.id
@@ -37,18 +37,18 @@ SELECT a.id::bigint, a.name, a.real_name, a.profile, a.data_quality,
       'id', related.id::bigint,
       'name', related.name,
       'resource_url', $2 || '/artists/' || related.id
-    ) ORDER BY related.id)
+    ))
     FROM artist_alias relation
     JOIN artist related ON related.id = relation.alias_id
     WHERE relation.artist_id = a.id
   ), '[]'::jsonb),
   COALESCE((
-    SELECT jsonb_agg(variation.name_variation ORDER BY variation.id)
+    SELECT jsonb_agg(variation.name_variation)
     FROM artist_name_variation variation
     WHERE variation.artist_id = a.id
   ), '[]'::jsonb),
   COALESCE((
-    SELECT jsonb_agg(artist_url.url ORDER BY artist_url.id)
+    SELECT jsonb_agg(artist_url.url)
     FROM artist_url
     WHERE artist_url.artist_id = a.id
   ), '[]'::jsonb)
@@ -91,13 +91,13 @@ SELECT l.id::bigint, l.contact_info, l.data_quality, l.name, l.profile,
       'id', child.id::bigint,
       'name', child.name,
       'resource_url', $2 || '/labels/' || child.id
-    ) ORDER BY child.id)
+    ))
     FROM label_sub_label relation
     JOIN label child ON child.id = relation.sub_label_id
     WHERE relation.parent_label_id = l.id
   ), '[]'::jsonb),
   COALESCE((
-    SELECT jsonb_agg(label_url.url ORDER BY label_url.id)
+    SELECT jsonb_agg(label_url.url)
     FROM label_url
     WHERE label_url.label_id = l.id
   ), '[]'::jsonb)
@@ -124,12 +124,12 @@ func (s *Store) Master(ctx context.Context, id int64) (catalog.MasterDetail, err
 	const query = `
 SELECT m.id::bigint, m.title, m.data_quality, m.main_release_id::bigint, m.year::integer,
   COALESCE((
-    SELECT jsonb_agg(master_genre.genre ORDER BY master_genre.id)
+    SELECT jsonb_agg(master_genre.genre)
     FROM master_genre
     WHERE master_genre.master_id = m.id
   ), '[]'::jsonb),
   COALESCE((
-    SELECT jsonb_agg(master_style.style ORDER BY master_style.id)
+    SELECT jsonb_agg(master_style.style)
     FROM master_style
     WHERE master_style.master_id = m.id
   ), '[]'::jsonb),
@@ -138,7 +138,7 @@ SELECT m.id::bigint, m.title, m.data_quality, m.main_release_id::bigint, m.year:
       'id', artist.id::bigint,
       'name', artist.name,
       'resource_url', $2 || '/artists/' || artist.id
-    ) ORDER BY artist.id)
+    ))
     FROM master_artist
     JOIN artist ON artist.id = master_artist.artist_id
     WHERE master_artist.master_id = m.id
@@ -148,7 +148,7 @@ SELECT m.id::bigint, m.title, m.data_quality, m.main_release_id::bigint, m.year:
       'url', master_video.url,
       'description', master_video.description,
       'title', master_video.title
-    ) ORDER BY master_video.id)
+    ))
     FROM master_video
     WHERE master_video.master_id = m.id
   ), '[]'::jsonb)
@@ -182,7 +182,7 @@ SELECT r.id::bigint, r.title, r.country, r.data_quality,
       'name', related.name,
       'role', related.role,
       'resource_url', $2 || '/artists/' || related.id
-    ) ORDER BY related.id)
+    ))
     FROM (
       SELECT artist.id, artist.name,
              string_agg(DISTINCT trim(relation.role), ',' ORDER BY trim(relation.role)) AS role
@@ -205,7 +205,7 @@ SELECT r.id::bigint, r.title, r.country, r.data_quality,
       'name', label.name,
       'catno', relation.category_notation,
       'resource_url', $2 || '/labels/' || label.id
-    ) ORDER BY label.id)
+    ))
     FROM label_release_item relation
     JOIN label ON label.id = relation.label_id
     WHERE relation.release_item_id = r.id
@@ -216,7 +216,7 @@ SELECT r.id::bigint, r.title, r.country, r.data_quality,
       'name', label.name,
       'catno', relation.work,
       'resource_url', $2 || '/labels/' || label.id
-    ) ORDER BY relation.id)
+    ))
     FROM release_item_work relation
     JOIN label ON label.id = relation.label_id
     WHERE relation.release_item_id = r.id
@@ -224,22 +224,25 @@ SELECT r.id::bigint, r.title, r.country, r.data_quality,
   COALESCE((
     SELECT jsonb_agg(jsonb_build_object(
       'name', release_item_format.name,
-      'qty', release_item_format.quantity,
+      'qty', COALESCE(
+        release_item_format.quantity_text,
+        release_item_format.quantity::text
+      ),
       'descriptions', CASE
         WHEN release_item_format.description IS NULL THEN '[]'::jsonb
         ELSE to_jsonb(string_to_array(release_item_format.description, ','))
       END
-    ) ORDER BY release_item_format.id)
+    ))
     FROM release_item_format
     WHERE release_item_format.release_item_id = r.id
   ), '[]'::jsonb),
   COALESCE((
-    SELECT jsonb_agg(release_item_style.style ORDER BY release_item_style.id)
+    SELECT jsonb_agg(release_item_style.style)
     FROM release_item_style
     WHERE release_item_style.release_item_id = r.id
   ), '[]'::jsonb),
   COALESCE((
-    SELECT jsonb_agg(release_item_genre.genre ORDER BY release_item_genre.id)
+    SELECT jsonb_agg(release_item_genre.genre)
     FROM release_item_genre
     WHERE release_item_genre.release_item_id = r.id
   ), '[]'::jsonb),
@@ -248,7 +251,7 @@ SELECT r.id::bigint, r.title, r.country, r.data_quality,
       'title', release_item_video.title,
       'url', release_item_video.url,
       'description', release_item_video.description
-    ) ORDER BY release_item_video.id)
+    ))
     FROM release_item_video
     WHERE release_item_video.release_item_id = r.id
   ), '[]'::jsonb)

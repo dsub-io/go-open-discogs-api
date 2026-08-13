@@ -26,7 +26,7 @@ const (
 )
 
 type HealthChecker interface {
-	Ping(context.Context) error
+	Ready(context.Context) error
 }
 
 type Handler struct {
@@ -65,7 +65,7 @@ func (h *Handler) liveness(writer http.ResponseWriter, _ *http.Request) {
 func (h *Handler) readiness(writer http.ResponseWriter, request *http.Request) {
 	ctx, cancel := context.WithTimeout(request.Context(), h.readinessTimeout)
 	defer cancel()
-	if err := h.checker.Ping(ctx); err != nil {
+	if err := h.checker.Ready(ctx); err != nil {
 		h.writeHealth(writer, http.StatusServiceUnavailable, StatusDown)
 		return
 	}

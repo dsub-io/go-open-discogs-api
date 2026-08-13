@@ -51,8 +51,10 @@ CLI values override ENV values, which override defaults. Prefer ENV, Docker secr
 If `--database-schema` / `API_DATABASE_SCHEMA` is omitted, the API uses `public` and emits a `WARN` at startup. Set the same schema used by the batch importer to avoid mixing OpenDiscogs tables with unrelated public objects. The API role needs `CONNECT` on the database, `USAGE` on that schema, and read access to its tables; it does not need schema creation or migration privileges.
 
 `--help` and `--version` do not connect to PostgreSQL. `--healthcheck` probes
-`http://127.0.0.1:8081/readyz` and exits non-zero unless both the management
-listener and PostgreSQL are ready; Compose uses this process control.
+`http://127.0.0.1:8081/readyz` and exits non-zero unless the management
+listener, PostgreSQL, and the canonical dump snapshot are ready. A first import
+does not become ready until deferred foreign keys are created and validated and
+the imported tables are analyzed; Compose uses this process control.
 
 ## Configuration inventory
 
@@ -93,7 +95,8 @@ settings, so they do not have ENV equivalents.
 - OpenAPI 3.1: `GET /openapi.json` or compatibility path `GET /v3/api-docs`
 - Build version: `GET /version`
 - Liveness: management `GET /healthz`
-- Readiness: management `GET /readyz` or `GET /actuator/health`
+- Readiness: management `GET /readyz` or `GET /actuator/health`; returns down
+  while the canonical catalog is bootstrap-pending, importing, or failed
 - Metrics, when enabled: management `GET /metrics` or `GET /actuator/prometheus`
 
 Collections use ascending resource-ID keyset pagination. Omit `after_id` for
@@ -102,6 +105,13 @@ the first page, then pass the response's non-null `next_after_id` while
 because calculating them for arbitrary filters does not remain bounded as the
 dump grows. `size` defaults to 20 and values above 30 are rejected.
 
+Nested relation arrays are unordered and do not expose database row order as a
+public contract. Multiple catalog numbers for the same Label and Release are
+preserved losslessly in the Label release
+`catnos` array; one resource row per Release keeps resource-ID pagination from
+splitting or skipping it. Release format `qty` is a canonical decimal string so
+values beyond signed integer storage remain lossless.
+
 Substring search is limited to artist and label names, artist real names, and
 master and release titles. Terms must contain 3 to 200 Unicode characters so
 PostgreSQL can use the canonical trigram indexes. Large profile, contact, and
@@ -109,7 +119,9 @@ notes fields are returned in detail responses but are not searchable. Release
 month filtering requires a year.
 
 Reproducible before/after measurements and their full-dump limitations are in
-[`docs/performance/2026-08-11-cursor-query-scalability.md`](docs/performance/2026-08-11-cursor-query-scalability.md).
+[`docs/performance/2026-08-11-cursor-query-scalability.md`](docs/performance/2026-08-11-cursor-query-scalability.md)
+and the OpenAPI-wide HTTP report at
+[`docs/performance/2026-08-13-openapi-http-benchmark.md`](docs/performance/2026-08-13-openapi-http-benchmark.md).
 
 The management listener defaults to loopback. Kubernetes explicitly binds it to `:8081` so kubelet probes can reach the pod.
 
@@ -147,6 +159,10 @@ Set `API_METRICS_ENABLED=false` to remove metrics routes. Leave `API_TRACING_ENA
 The quality gate runs formatting, module checks, `vet`, race tests, 100% coverage, OpenAPI validation, integration/E2E tests against canonical migrations, container checks, CodeQL, and vulnerability scanning.
 
 Performance reports belong in [`docs/performance`](docs/performance). Each report must record the same data, hardware, concurrency, warm-up, and run count before and after, plus p50/p95/p99 latency, throughput, memory/allocation, and relevant DB query count or plan. No full-dataset claim is made without a representative dataset measurement.
+
+Run `scripts/benchmark-http-api.sh` to exercise every public data operation in
+OpenAPI with deterministic data and collect HTTP, Go runtime, and PostgreSQL
+evidence without downloading a monthly dump.
 
 ## License
 

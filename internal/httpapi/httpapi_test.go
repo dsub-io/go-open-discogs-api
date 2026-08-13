@@ -18,10 +18,12 @@ import (
 )
 
 const (
-	testServerURL                   = "https://api.example.com"
-	testCacheControl                = "public, max-age=10"
-	testSnapshotDescriptionFragment = "currently imported public Discogs monthly dump snapshot"
-	testNotFoundDescriptionFragment = "does not assert absence from Discogs"
+	testServerURL                    = "https://api.example.com"
+	testCacheControl                 = "public, max-age=10"
+	testSnapshotDescriptionFragment  = "currently imported public Discogs monthly dump snapshot"
+	testUnorderedDescriptionFragment = "Nested relation arrays are unordered"
+	testNotFoundDescriptionFragment  = "does not assert absence from Discogs"
+	testReleaseFormatQuantity        = "1010487400000000000000000000000000000000000000000000"
 )
 
 var errRepository = errors.New("repository failure")
@@ -39,12 +41,13 @@ func TestRouterServesEveryContractRoute(t *testing.T) {
 		{"/artists/1/releases?after_id=1", `"resource_url"`},
 		{"/labels?name=label", `"has_more":false`},
 		{"/labels/1", `"parent_label"`},
-		{"/labels/1/releases?after_id=1", `"catno"`},
+		{"/labels/1/releases?after_id=1", `"catnos"`},
 		{"/masters?title=master&year=2000", `"has_more":false`},
 		{"/masters/1", `"main_release"`},
 		{"/masters/1/releases?after_id=1", `"artist_id"`},
 		{"/releases?title=release&country=US&year=2000&month=2&master=true", `"has_more":false`},
 		{"/releases/1", `"companies"`},
+		{"/releases/1", `"qty":"` + testReleaseFormatQuantity + `"`},
 		{RouteOpenAPI, `"openapi": "3.1.0"`},
 		{RouteOpenAPIJSON, `"openapi": "3.1.0"`},
 		{RouteVersion, `"version"`},
@@ -128,6 +131,9 @@ func TestOpenAPIDocumentIsValid(t *testing.T) {
 	}
 	if !strings.Contains(document.Info.Description, testSnapshotDescriptionFragment) {
 		t.Fatalf("OpenAPI description does not define snapshot semantics: %s", document.Info.Description)
+	}
+	if !strings.Contains(document.Info.Description, testUnorderedDescriptionFragment) {
+		t.Fatalf("OpenAPI description does not define relation ordering semantics: %s", document.Info.Description)
 	}
 	notFound := document.Components.Responses["NotFound"]
 	if notFound == nil || notFound.Value == nil || notFound.Value.Description == nil ||
@@ -321,7 +327,8 @@ func (r *repositoryStub) SearchReleases(context.Context, catalog.ReleaseFilter, 
 }
 
 func (r *repositoryStub) Release(context.Context, int64) (catalog.ReleaseDetail, error) {
-	return catalog.ReleaseDetail{Release: catalog.Release{ID: 1}, Artists: []catalog.ReleaseArtist{}, Labels: []catalog.ReleaseLabel{}, Companies: []catalog.ReleaseLabel{}, Formats: []catalog.ReleaseFormat{}, Styles: []string{}, Genres: []string{}, Videos: []catalog.ReleaseVideo{}}, r.err
+	quantity := testReleaseFormatQuantity
+	return catalog.ReleaseDetail{Release: catalog.Release{ID: 1}, Artists: []catalog.ReleaseArtist{}, Labels: []catalog.ReleaseLabel{}, Companies: []catalog.ReleaseLabel{}, Formats: []catalog.ReleaseFormat{{Quantity: &quantity, Descriptions: []string{}}}, Styles: []string{}, Genres: []string{}, Videos: []catalog.ReleaseVideo{}}, r.err
 }
 
 type failingWriter struct {

@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenDiscogs API",
     "version": "1.0.0",
-    "description": "High-performance read-only API for the currently imported public Discogs monthly dump snapshot. Collection resources use stable ascending-ID cursor pagination without exact counts. The service does not call or proxy the Discogs API, perform live hydration, or accept catalog writes."
+    "description": "High-performance read-only API for the currently imported public Discogs monthly dump snapshot. Collection resources use stable ascending-ID cursor pagination without exact counts. Nested relation arrays are unordered, and clients must not rely on array position. The service does not call or proxy the Discogs API, perform live hydration, or accept catalog writes."
   },
   "servers": [{"url": "/"}],
   "paths": {
@@ -296,14 +296,14 @@
       },
       "LabelRelease": {
         "type": "object",
-        "required": ["id", "artist", "title", "year", "status", "catno", "format"],
+        "required": ["id", "artist", "title", "year", "status", "catnos", "format"],
         "properties": {
           "id": {"type": "integer", "format": "int64"},
           "artist": {"$ref": "#/components/schemas/NullableString"},
           "title": {"$ref": "#/components/schemas/NullableString"},
           "year": {"$ref": "#/components/schemas/NullableInteger"},
           "status": {"$ref": "#/components/schemas/NullableString"},
-          "catno": {"$ref": "#/components/schemas/NullableString"},
+          "catnos": {"type": "array", "items": {"type": "string"}},
           "format": {"$ref": "#/components/schemas/NullableString"}
         }
       },
@@ -387,7 +387,7 @@
         "required": ["name", "qty", "descriptions"],
         "properties": {
           "name": {"$ref": "#/components/schemas/NullableString"},
-          "qty": {"$ref": "#/components/schemas/NullableInteger"},
+          "qty": {"$ref": "#/components/schemas/NullableString"},
           "descriptions": {"type": "array", "items": {"type": "string"}}
         }
       },

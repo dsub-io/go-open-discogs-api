@@ -169,13 +169,13 @@ type LabelDetail struct {
 }
 
 type LabelRelease struct {
-	ID               int64   `json:"id"`
-	Artist           *string `json:"artist"`
-	Title            *string `json:"title"`
-	Year             *int    `json:"year"`
-	Status           *string `json:"status"`
-	CategoryNotation *string `json:"catno"`
-	Format           *string `json:"format"`
+	ID             int64    `json:"id"`
+	Artist         *string  `json:"artist"`
+	Title          *string  `json:"title"`
+	Year           *int     `json:"year"`
+	Status         *string  `json:"status"`
+	CatalogNumbers []string `json:"catnos"`
+	Format         *string  `json:"format"`
 }
 
 func (item LabelRelease) pageID() int64 { return item.ID }
@@ -251,7 +251,7 @@ type ReleaseLabel struct {
 
 type ReleaseFormat struct {
 	Name         *string  `json:"name"`
-	Quantity     *int     `json:"qty"`
+	Quantity     *string  `json:"qty"`
 	Descriptions []string `json:"descriptions"`
 }
 
