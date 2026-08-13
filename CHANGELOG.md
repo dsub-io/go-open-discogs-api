@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/dsub-io/go-open-discogs-api/compare/v1.1.0...v1.1.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* align API with canonical catalog state ([#10](https://github.com/dsub-io/go-open-discogs-api/issues/10)) ([66ccd93](https://github.com/dsub-io/go-open-discogs-api/commit/66ccd933dc43805c88daa1e56205b6cfdc40aae5))
+
 ## [1.1.0](https://github.com/dsub-io/go-open-discogs-api/compare/v1.0.0...v1.1.0) (2026-08-11)
 
 
