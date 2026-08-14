@@ -14,10 +14,22 @@ const (
 	errorTextEncoding      = "%s must be valid UTF-8"
 	errorTextLength        = "%s must contain between %d and %d characters"
 	errorMonthRequiresYear = "month requires year"
+	errorRequired          = "%s is required"
 	minimumSearchLength    = 3
 	maximumSearchLength    = 200
 	maximumCountryLength   = 255
 )
+
+func requiredTextFilter(raw string, minimum, maximum int, name string) (string, error) {
+	value, err := optionalTextFilter(raw, minimum, maximum, name)
+	if err != nil {
+		return "", err
+	}
+	if value == "" {
+		return "", fmt.Errorf(errorRequired, name)
+	}
+	return value, nil
+}
 
 func pathID(request *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(request.PathValue(ParameterID), 10, 64)

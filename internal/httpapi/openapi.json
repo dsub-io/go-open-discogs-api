@@ -155,7 +155,11 @@
           {"$ref": "#/components/parameters/Country"},
           {"$ref": "#/components/parameters/Year"},
           {"$ref": "#/components/parameters/Month"},
-          {"$ref": "#/components/parameters/Master"}
+          {"$ref": "#/components/parameters/Master"},
+          {"$ref": "#/components/parameters/LabelID"},
+          {"$ref": "#/components/parameters/CatalogNumber"},
+          {"$ref": "#/components/parameters/IdentifierType"},
+          {"$ref": "#/components/parameters/IdentifierValue"}
         ],
         "responses": {
           "200": {"description": "Release page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReleasePage"}}}},
@@ -177,6 +181,53 @@
         }
       }
     },
+    "/releases/{id}/tracks": {
+      "get": {
+        "operationId": "getReleaseTracks",
+        "tags": ["releases"],
+        "description": "Returns a bounded page of tracks. Physical or response order has no catalog meaning; continue only with next_cursor.",
+        "parameters": [
+          {"$ref": "#/components/parameters/ID"},
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Size"}
+        ],
+        "responses": {
+          "200": {"description": "Release track page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReleaseTrackPage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/releases/{id}/identifiers": {
+      "get": {
+        "operationId": "getReleaseIdentifiers",
+        "tags": ["releases"],
+        "description": "Returns a bounded page of identifiers such as barcodes and matrix or runout values. Continue only with next_cursor.",
+        "parameters": [
+          {"$ref": "#/components/parameters/ID"},
+          {"$ref": "#/components/parameters/Cursor"},
+          {"$ref": "#/components/parameters/Size"}
+        ],
+        "responses": {
+          "200": {"description": "Release identifier page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReleaseIdentifierPage"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/snapshot": {
+      "get": {
+        "operationId": "getSnapshot",
+        "tags": ["system"],
+        "description": "Reports the currently imported dump date and successful importer provenance for each required catalog entity.",
+        "responses": {
+          "200": {"description": "Catalog snapshot", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogSnapshot"}}}},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
     "/version": {
       "get": {
         "operationId": "getVersion",
@@ -191,6 +242,7 @@
     "parameters": {
       "ID": {"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64", "minimum": 1, "maximum": 2147483647}},
       "AfterID": {"name": "after_id", "in": "query", "description": "Return records with an ID greater than this cursor. Omit or use zero for the first page.", "schema": {"type": "integer", "format": "int64", "minimum": 0, "maximum": 2147483647, "default": 0}},
+      "Cursor": {"name": "cursor", "in": "query", "description": "Opaque cursor returned as next_cursor by a Release child collection. Omit for the first page.", "schema": {"type": "string"}},
       "Size": {"name": "size", "in": "query", "description": "Number of records to return. Values above 30 are rejected.", "schema": {"type": "integer", "minimum": 1, "maximum": 30, "default": 20}},
       "Name": {"name": "name", "in": "query", "description": "Case-insensitive substring search; 3 to 200 characters.", "schema": {"type": "string", "minLength": 3, "maxLength": 200}},
       "RealName": {"name": "real_name", "in": "query", "description": "Case-insensitive substring search; 3 to 200 characters.", "schema": {"type": "string", "minLength": 3, "maxLength": 200}},
@@ -198,7 +250,11 @@
       "Country": {"name": "country", "in": "query", "description": "Case-insensitive exact match.", "schema": {"type": "string", "minLength": 1, "maxLength": 255}},
       "Year": {"name": "year", "in": "query", "schema": {"type": "integer", "minimum": 0, "maximum": 32767}},
       "Month": {"name": "month", "in": "query", "description": "Requires year.", "schema": {"type": "integer", "minimum": 1, "maximum": 12}},
-      "Master": {"name": "master", "in": "query", "schema": {"type": "boolean"}}
+      "Master": {"name": "master", "in": "query", "schema": {"type": "boolean"}},
+      "LabelID": {"name": "label_id", "in": "query", "description": "Exact catalog-number lookup selector. Requires catno and cannot be combined with other Release filters.", "schema": {"type": "integer", "format": "int64", "minimum": 1, "maximum": 2147483647}},
+      "CatalogNumber": {"name": "catno", "in": "query", "description": "Case-sensitive exact catalog number. Requires label_id and cannot be combined with other Release filters.", "schema": {"type": "string", "minLength": 1, "maxLength": 1000}},
+      "IdentifierType": {"name": "identifier_type", "in": "query", "description": "Case-insensitive exact identifier type. Requires identifier_value and cannot be combined with other Release filters.", "schema": {"type": "string", "minLength": 1, "maxLength": 255}},
+      "IdentifierValue": {"name": "identifier_value", "in": "query", "description": "Case-sensitive exact identifier value. Requires identifier_type and cannot be combined with other Release filters.", "schema": {"type": "string", "minLength": 1, "maxLength": 4096}}
     },
     "responses": {
       "BadRequest": {"description": "Invalid request", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}},
@@ -214,6 +270,16 @@
         "required": ["items", "next_after_id", "has_more", "page_size", "resource_uri"],
         "properties": {
           "next_after_id": {"type": ["integer", "null"], "format": "int64", "minimum": 1, "maximum": 2147483647},
+          "has_more": {"type": "boolean"},
+          "page_size": {"type": "integer"},
+          "resource_uri": {"type": "string"}
+        }
+      },
+      "HashPageEnvelope": {
+        "type": "object",
+        "required": ["items", "next_cursor", "has_more", "page_size", "resource_uri"],
+        "properties": {
+          "next_cursor": {"type": ["string", "null"]},
           "has_more": {"type": "boolean"},
           "page_size": {"type": "integer"},
           "resource_uri": {"type": "string"}
@@ -414,6 +480,46 @@
           }}
         ]
       },
+      "ReleaseTrack": {
+        "type": "object",
+        "required": ["duration", "position", "title"],
+        "properties": {
+          "duration": {"$ref": "#/components/schemas/NullableString"},
+          "position": {"$ref": "#/components/schemas/NullableString"},
+          "title": {"$ref": "#/components/schemas/NullableString"}
+        }
+      },
+      "ReleaseIdentifier": {
+        "type": "object",
+        "required": ["description", "type", "value"],
+        "properties": {
+          "description": {"$ref": "#/components/schemas/NullableString"},
+          "type": {"$ref": "#/components/schemas/NullableString"},
+          "value": {"$ref": "#/components/schemas/NullableString"}
+        }
+      },
+      "SnapshotEntity": {
+        "type": "object",
+        "required": ["entity_type", "status", "dump_date", "applied_at", "processor", "processor_version"],
+        "properties": {
+          "entity_type": {"type": "string", "enum": ["artist", "label", "master", "release"]},
+          "status": {"type": "string", "enum": ["bootstrap_pending", "importing", "ready", "failed"]},
+          "dump_date": {"type": ["string", "null"], "format": "date"},
+          "applied_at": {"type": ["string", "null"], "format": "date-time"},
+          "processor": {"$ref": "#/components/schemas/NullableString"},
+          "processor_version": {"$ref": "#/components/schemas/NullableString"}
+        }
+      },
+      "CatalogSnapshot": {
+        "type": "object",
+        "required": ["ready", "status", "updated_at", "entities"],
+        "properties": {
+          "ready": {"type": "boolean"},
+          "status": {"type": "string", "enum": ["bootstrap_pending", "importing", "ready", "failed"]},
+          "updated_at": {"type": "string", "format": "date-time"},
+          "entities": {"type": "array", "items": {"$ref": "#/components/schemas/SnapshotEntity"}, "minItems": 4, "maxItems": 4}
+        }
+      },
       "ArtistPage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Artist"}}}}]},
       "ArtistReleasePage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/ArtistRelease"}}}}]},
       "LabelPage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Label"}}}}]},
@@ -421,6 +527,8 @@
       "MasterPage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Master"}}}}]},
       "MasterReleasePage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/MasterRelease"}}}}]},
       "ReleasePage": {"allOf": [{"$ref": "#/components/schemas/PageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/Release"}}}}]},
+      "ReleaseTrackPage": {"allOf": [{"$ref": "#/components/schemas/HashPageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/ReleaseTrack"}}}}]},
+      "ReleaseIdentifierPage": {"allOf": [{"$ref": "#/components/schemas/HashPageEnvelope"}, {"type": "object", "required": ["items"], "properties": {"items": {"type": "array", "items": {"$ref": "#/components/schemas/ReleaseIdentifier"}}}}]},
       "Problem": {
         "type": "object",
         "required": ["type", "title", "status", "detail", "instance"],

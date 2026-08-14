@@ -19,9 +19,15 @@ filters.
 
 Nested relation collections are unordered and do not expose PostgreSQL row
 order as part of the API contract. Root collection cursors continue to use the
-Discogs resource ID.
+Discogs resource ID. Release tracks and identifiers use bounded opaque cursors
+derived from their canonical compatibility slot; that cursor is continuation
+state, not a semantic track or identifier order.
 Release format quantities are served from canonical decimal text rather than
 the compatibility integer column.
+
+`/snapshot` reads canonical readiness, entity state, and successful checkpoint
+views. It exposes dump date and importer provenance without exposing source
+URIs, checksums, database details, or import failure text.
 
 Public and management listeners are separate. Liveness checks only the process.
 Readiness performs a bounded canonical catalog-state query, which also verifies

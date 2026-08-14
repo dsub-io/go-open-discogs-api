@@ -1,9 +1,9 @@
 module github.com/dsub-io/go-open-discogs-api
 
-go 1.26
+go 1.26.6
 
 require (
-	github.com/dsub-io/open-discogs-model v0.3.2
+	github.com/dsub-io/open-discogs-model v0.4.0
 	github.com/exaring/otelpgx v0.11.1
 	github.com/getkin/kin-openapi v0.146.0
 	github.com/jackc/pgx/v5 v5.10.0

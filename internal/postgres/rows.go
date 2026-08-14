@@ -9,7 +9,14 @@ import (
 
 type rowScanner[T catalog.PageItem] func(pgx.CollectableRow) (T, error)
 
+type hashRowScanner[T catalog.HashPageItem] func(pgx.CollectableRow) (T, error)
+
 func collectRows[T catalog.PageItem](rows pgx.Rows, operation string, scanner rowScanner[T]) ([]T, error) {
+	items, err := pgx.CollectRows(rows, pgx.RowToFunc[T](scanner))
+	return items, operationError(operation, err)
+}
+
+func collectHashRows[T catalog.HashPageItem](rows pgx.Rows, operation string, scanner hashRowScanner[T]) ([]T, error) {
 	items, err := pgx.CollectRows(rows, pgx.RowToFunc[T](scanner))
 	return items, operationError(operation, err)
 }
@@ -46,6 +53,18 @@ func scanRelease(row pgx.CollectableRow) (catalog.Release, error) {
 		&item.ReleasedYear, &item.ReleasedMonth, &item.ReleasedDay,
 		&item.ListedReleaseDate, &item.IsMaster, &item.MasterID, &item.Notes, &item.Status,
 	)
+	return item, err
+}
+
+func scanReleaseTrack(row pgx.CollectableRow) (catalog.ReleaseTrack, error) {
+	var item catalog.ReleaseTrack
+	err := row.Scan(&item.Hash, &item.Duration, &item.Position, &item.Title)
+	return item, err
+}
+
+func scanReleaseIdentifier(row pgx.CollectableRow) (catalog.ReleaseIdentifier, error) {
+	var item catalog.ReleaseIdentifier
+	err := row.Scan(&item.Hash, &item.Description, &item.Type, &item.Value)
 	return item, err
 }
 

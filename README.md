@@ -94,6 +94,9 @@ settings, so they do not have ENV equivalents.
 
 - OpenAPI 3.1: `GET /openapi.json` or compatibility path `GET /v3/api-docs`
 - Build version: `GET /version`
+- Imported snapshot provenance: `GET /snapshot`
+- Bounded Release children: `GET /releases/{id}/tracks` and
+  `GET /releases/{id}/identifiers`
 - Liveness: management `GET /healthz`
 - Readiness: management `GET /readyz` or `GET /actuator/health`; returns down
   while the canonical catalog is bootstrap-pending, importing, or failed
@@ -104,6 +107,12 @@ the first page, then pass the response's non-null `next_after_id` while
 `has_more` is true. Responses intentionally omit exact totals and page counts
 because calculating them for arbitrary filters does not remain bounded as the
 dump grows. `size` defaults to 20 and values above 30 are rejected.
+
+Release track and identifier collections use an opaque `cursor` because
+relation rows have no public surrogate ID or meaningful database order. Omit
+it for the first page and pass the returned `next_cursor` unchanged while
+`has_more` is true. A missing parent Release returns `404`; an existing Release
+without the requested relation returns an empty page.
 
 Nested relation arrays are unordered and do not expose database row order as a
 public contract. Multiple catalog numbers for the same Label and Release are
@@ -117,6 +126,17 @@ master and release titles. Terms must contain 3 to 200 Unicode characters so
 PostgreSQL can use the canonical trigram indexes. Large profile, contact, and
 notes fields are returned in detail responses but are not searchable. Release
 month filtering requires a year.
+
+Exact Release identification is available on the Release collection. A Label
+catalog-number lookup requires both `label_id` and case-sensitive `catno`. An
+identifier lookup requires case-insensitive `identifier_type` and
+case-sensitive `identifier_value`. Exact selectors cannot be combined with one
+another or with title, country, year, month, or master filters. These lookups
+recheck original stored values after indexed candidate selection, so hash
+collisions cannot produce false matches.
+Deploy canonical `open-discogs-model` migration V023 before enabling this API
+version; the migration owns the required exact-lookup indexes. Run that index
+build with both batch importers stopped.
 
 Reproducible before/after measurements and their full-dump limitations are in
 [`docs/performance/2026-08-11-cursor-query-scalability.md`](docs/performance/2026-08-11-cursor-query-scalability.md)

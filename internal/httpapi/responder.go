@@ -25,6 +25,9 @@ type JSONPayload interface {
 		PageResponse[catalog.Master] |
 		PageResponse[catalog.MasterRelease] |
 		PageResponse[catalog.Release] |
+		HashPageResponse[catalog.ReleaseTrack] |
+		HashPageResponse[catalog.ReleaseIdentifier] |
+		catalog.CatalogSnapshot |
 		catalog.ArtistDetail |
 		catalog.LabelDetail |
 		catalog.MasterDetail |

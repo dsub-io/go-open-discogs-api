@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dsub-io/go-open-discogs-api/internal/catalog"
 	"github.com/dsub-io/go-open-discogs-api/internal/observability"
@@ -46,8 +47,13 @@ func TestRouterServesEveryContractRoute(t *testing.T) {
 		{"/masters/1", `"main_release"`},
 		{"/masters/1/releases?after_id=1", `"artist_id"`},
 		{"/releases?title=release&country=US&year=2000&month=2&master=true", `"has_more":false`},
+		{"/releases?label_id=1&catno=CAT-1", `"has_more":false`},
+		{"/releases?identifier_type=Barcode&identifier_value=1234", `"has_more":false`},
 		{"/releases/1", `"companies"`},
 		{"/releases/1", `"qty":"` + testReleaseFormatQuantity + `"`},
+		{"/releases/1/tracks?size=1", `"position"`},
+		{"/releases/1/identifiers?size=1", `"description"`},
+		{RouteSnapshot, `"entities"`},
 		{RouteOpenAPI, `"openapi": "3.1.0"`},
 		{RouteOpenAPIJSON, `"openapi": "3.1.0"`},
 		{RouteVersion, `"version"`},
@@ -77,7 +83,8 @@ func TestRouterMapsRepositoryFailuresForEveryUseCase(t *testing.T) {
 		"/artists", "/artists/1", "/artists/1/releases",
 		"/labels", "/labels/1", "/labels/1/releases",
 		"/masters", "/masters/1", "/masters/1/releases",
-		"/releases", "/releases/1",
+		"/releases", "/releases?label_id=1&catno=CAT-1", "/releases?identifier_type=Barcode&identifier_value=1234",
+		"/releases/1", "/releases/1/tracks", "/releases/1/identifiers", RouteSnapshot,
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
@@ -98,6 +105,15 @@ func TestRouterRejectsInvalidTransportInput(t *testing.T) {
 		"/labels?name=ab", "/labels?size=31", "/labels/0", "/labels/0/releases", "/labels/1/releases?after_id=invalid",
 		"/masters?title=ab", "/masters?year=invalid", "/masters?after_id=invalid", "/masters/0", "/masters/0/releases", "/masters/1/releases?size=31",
 		"/releases?title=ab", "/releases?country=" + strings.Repeat("x", maximumCountryLength+1), "/releases?after_id=invalid", "/releases?year=invalid", "/releases?month=13", "/releases?month=2", "/releases?master=maybe", "/releases/0",
+		"/releases?label_id=1", "/releases?catno=CAT-1", "/releases?label_id=&catno=CAT-1", "/releases?label_id=1&catno=", "/releases?label_id=invalid&catno=CAT-1",
+		"/releases?label_id=1&catno=" + strings.Repeat("x", maximumCatalogNumberLength+1),
+		"/releases?identifier_type=Barcode", "/releases?identifier_value=1234", "/releases?identifier_type=&identifier_value=1234", "/releases?identifier_type=Barcode&identifier_value=",
+		"/releases?identifier_type=" + strings.Repeat("x", maximumIdentifierTypeLength+1) + "&identifier_value=1234",
+		"/releases?identifier_type=Barcode&identifier_value=" + strings.Repeat("x", maximumIdentifierValueLength+1),
+		"/releases?label_id=1&catno=CAT-1&identifier_type=Barcode&identifier_value=1234",
+		"/releases?label_id=1&catno=CAT-1&title=release",
+		"/releases/0/tracks", "/releases/1/tracks?cursor=invalid", "/releases/1/tracks?size=31",
+		"/releases/0/identifiers", "/releases/1/identifiers?cursor=invalid", "/releases/1/identifiers?size=31",
 	}
 	for _, path := range paths {
 		t.Run(path, func(t *testing.T) {
@@ -170,6 +186,39 @@ func TestPaginationAndRequestParsing(t *testing.T) {
 		t.Fatalf("unexpected populated page: %+v", page)
 	}
 
+	hash := int32(-42)
+	cursor := encodeHashCursor(&hash)
+	if cursor == nil {
+		t.Fatal("hash cursor was not encoded")
+	}
+	hashRequest, err := parseHashCursorPage(url.Values{ParameterCursor: {*cursor}, ParameterSize: {"1"}})
+	if err != nil || hashRequest.AfterHash == nil || *hashRequest.AfterHash != hash || hashRequest.Size != 1 || hashRequest.FetchSize() != 2 {
+		t.Fatalf("hash request=%+v err=%v", hashRequest, err)
+	}
+	hashRequest, err = parseHashCursorPage(url.Values{})
+	if err != nil || hashRequest.AfterHash != nil || hashRequest.Size != defaultPageSize {
+		t.Fatalf("default hash request=%+v err=%v", hashRequest, err)
+	}
+	for _, invalidCursor := range []string{"%", "invalid", "AA"} {
+		if _, err := parseHashCursorPage(url.Values{ParameterCursor: {invalidCursor}}); err == nil {
+			t.Fatalf("accepted cursor %q", invalidCursor)
+		}
+	}
+	if _, err := parseHashCursorPage(url.Values{ParameterSize: {"31"}}); err == nil {
+		t.Fatal("accepted oversized hash page")
+	}
+	hashPage := hashPageResponse(catalog.HashPage[catalog.ReleaseTrack]{Items: nil}, RouteReleaseTracks)
+	if hashPage.Items == nil || hashPage.NextCursor != nil || hashPage.HasMore {
+		t.Fatalf("empty hash page=%+v", hashPage)
+	}
+	hashPage = hashPageResponse(
+		catalog.NewHashPage([]catalog.ReleaseTrack{{Hash: -42}, {Hash: 7}}, 1),
+		RouteReleaseTracks,
+	)
+	if !hashPage.HasMore || hashPage.NextCursor == nil || hashPage.PageSize != 1 {
+		t.Fatalf("populated hash page=%+v", hashPage)
+	}
+
 	if value, err := optionalInt("", 1, 12, ParameterMonth); err != nil || value != nil {
 		t.Fatalf("optional int value=%v err=%v", value, err)
 	}
@@ -190,6 +239,12 @@ func TestPaginationAndRequestParsing(t *testing.T) {
 	}
 	if value, err := optionalCountry(" KR "); err != nil || value != "KR" {
 		t.Fatalf("country=%q err=%v", value, err)
+	}
+	if value, err := requiredTextFilter(" value ", 1, 10, "field"); err != nil || value != "value" {
+		t.Fatalf("required value=%q err=%v", value, err)
+	}
+	if _, err := requiredTextFilter(" ", 1, 10, "field"); err == nil {
+		t.Fatal("blank required value was accepted")
 	}
 }
 
@@ -283,6 +338,13 @@ type repositoryStub struct {
 	panicSearch bool
 }
 
+func (r *repositoryStub) Snapshot(context.Context) (catalog.CatalogSnapshot, error) {
+	return catalog.CatalogSnapshot{
+		Ready: true, Status: "ready", UpdatedAt: time.Unix(0, 0).UTC(),
+		Entities: []catalog.SnapshotEntity{},
+	}, r.err
+}
+
 func (r *repositoryStub) SearchArtists(context.Context, catalog.ArtistFilter, catalog.PageRequest) (catalog.Page[catalog.Artist], error) {
 	if r.panicSearch {
 		panic("test panic")
@@ -326,10 +388,28 @@ func (r *repositoryStub) SearchReleases(context.Context, catalog.ReleaseFilter, 
 	return catalog.Page[catalog.Release]{Items: []catalog.Release{{ID: 1}}}, r.err
 }
 
+func (r *repositoryStub) ReleasesByCatalogNumber(context.Context, catalog.CatalogNumberLookup, catalog.PageRequest) (catalog.Page[catalog.Release], error) {
+	return catalog.Page[catalog.Release]{Items: []catalog.Release{{ID: 1}}}, r.err
+}
+
+func (r *repositoryStub) ReleasesByIdentifier(context.Context, catalog.IdentifierLookup, catalog.PageRequest) (catalog.Page[catalog.Release], error) {
+	return catalog.Page[catalog.Release]{Items: []catalog.Release{{ID: 1}}}, r.err
+}
+
 func (r *repositoryStub) Release(context.Context, int64) (catalog.ReleaseDetail, error) {
 	quantity := testReleaseFormatQuantity
 	return catalog.ReleaseDetail{Release: catalog.Release{ID: 1}, Artists: []catalog.ReleaseArtist{}, Labels: []catalog.ReleaseLabel{}, Companies: []catalog.ReleaseLabel{}, Formats: []catalog.ReleaseFormat{{Quantity: &quantity, Descriptions: []string{}}}, Styles: []string{}, Genres: []string{}, Videos: []catalog.ReleaseVideo{}}, r.err
 }
+
+func (r *repositoryStub) ReleaseTracks(context.Context, int64, catalog.HashPageRequest) (catalog.HashPage[catalog.ReleaseTrack], error) {
+	return catalog.HashPage[catalog.ReleaseTrack]{Items: []catalog.ReleaseTrack{{Hash: 1, Position: stringPointer("A1")}}}, r.err
+}
+
+func (r *repositoryStub) ReleaseIdentifiers(context.Context, int64, catalog.HashPageRequest) (catalog.HashPage[catalog.ReleaseIdentifier], error) {
+	return catalog.HashPage[catalog.ReleaseIdentifier]{Items: []catalog.ReleaseIdentifier{{Hash: 1, Description: stringPointer("Barcode")}}}, r.err
+}
+
+func stringPointer(value string) *string { return &value }
 
 type failingWriter struct {
 	header http.Header
