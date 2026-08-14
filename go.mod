@@ -1,6 +1,6 @@
 module github.com/dsub-io/go-open-discogs-api
 
-go 1.26
+go 1.26.6
 
 require (
 	github.com/dsub-io/open-discogs-model v0.4.0
