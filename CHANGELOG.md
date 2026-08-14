@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/dsub-io/go-open-discogs-api/compare/v1.1.1...v1.2.0) (2026-08-14)
+
+
+### Features
+
+* expand catalog query API ([#12](https://github.com/dsub-io/go-open-discogs-api/issues/12)) ([b58dce2](https://github.com/dsub-io/go-open-discogs-api/commit/b58dce22efeb866a4c67fbdcc4ba2e3f2b6efe9d))
+
 ## [1.1.1](https://github.com/dsub-io/go-open-discogs-api/compare/v1.1.0...v1.1.1) (2026-08-13)
 
 
