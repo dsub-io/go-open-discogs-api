@@ -5,7 +5,7 @@ go 1.26.6
 require (
 	github.com/dsub-io/open-discogs-model v0.4.0
 	github.com/exaring/otelpgx v0.11.1
-	github.com/getkin/kin-openapi v0.146.0
+	github.com/getkin/kin-openapi v0.147.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/prometheus/client_golang v1.24.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.70.0
