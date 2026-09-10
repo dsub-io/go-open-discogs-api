@@ -177,9 +177,9 @@ if [ "$listener_started" = false ]; then
   printf 'API management listener did not start.\n' >&2
   exit 1
 fi
-if docker exec "$api_container" \
+if ! docker exec "$api_container" \
   /go-open-discogs-api --healthcheck >/dev/null 2>&1; then
-  printf 'Readiness probe succeeded before catalog bootstrap finalization.\n' >&2
+  printf 'Readiness probe failed with an empty migrated catalog.\n' >&2
   exit 1
 fi
 
@@ -215,6 +215,22 @@ if [ "$ready" = false ]; then
   printf 'API container did not become ready.\n' >&2
   exit 1
 fi
+
+for import_state in importing failed; do
+  if [ "$import_state" = importing ]; then
+    transition="status = 'importing', operation = 'refresh', active_import_run_id = (select max(id) from discogs_import_run)"
+  else
+    transition="status = 'failed', active_import_run_id = null, failure_message = 'readiness-test'"
+  fi
+  docker exec "$database_container" \
+    psql --set ON_ERROR_STOP=1 --username discogs --dbname discogs \
+    --command "update discogs_catalog_entity_state set $transition" >/dev/null
+  if ! docker exec "$api_container" \
+    /go-open-discogs-api --healthcheck >/dev/null 2>&1; then
+    printf 'Readiness probe failed during %s import.\n' "$import_state" >&2
+    exit 1
+  fi
+done
 
 docker stop --time 1 "$database_container" >/dev/null
 if docker exec "$api_container" \

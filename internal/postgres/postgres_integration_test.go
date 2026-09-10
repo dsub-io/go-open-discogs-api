@@ -507,32 +507,34 @@ func TestStoreReadsSelectedCustomSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := New(customPool, testPublicURL, testQueryTimeout)
-	if err := store.Ready(ctx); !errors.Is(err, ErrCatalogNotReady) {
+	if err := store.Ready(ctx); err != nil {
 		t.Fatalf("bootstrap readiness error=%v", err)
 	}
+	page, err := store.SearchArtists(ctx, catalog.ArtistFilter{}, catalog.PageRequest{Size: 20})
+	assertPage(t, page, 0, false, err)
+	if _, err := store.Artist(ctx, 9001); !errors.Is(err, catalog.ErrNotFound) {
+		t.Fatalf("unimported artist error=%v", err)
+	}
 	if _, err := customPool.Exec(ctx, `
-		insert into discogs_import_run (
-			manifest_sha256, status, completed_at, processor, processor_version
-		) values (repeat('a', 64), 'success', now(), 'api-test', '1');
+		insert into discogs_import_run (manifest_sha256, status, processor, processor_version)
+		values (repeat('a', 64), 'running', 'api-test', '1');
 		update discogs_catalog_entity_state
-		set status = 'ready',
-		    operation = null,
-		    active_import_run_id = null,
-		    last_successful_import_run_id = currval('discogs_import_run_id_seq'),
-		    ready_at = now(),
-		    updated_at = now(),
-		    failure_message = null`); err != nil {
+		set status = 'importing', active_import_run_id = currval('discogs_import_run_id_seq')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Ready(ctx); err != nil {
-		t.Fatalf("finalized readiness error=%v", err)
+		t.Fatalf("initial import readiness error=%v", err)
+	}
+	snapshot, err := store.Snapshot(ctx)
+	if err != nil || snapshot.Ready || snapshot.Status != "importing" {
+		t.Fatalf("import snapshot=%+v err=%v", snapshot, err)
 	}
 	if _, err := customPool.Exec(ctx, `
 INSERT INTO artist (id, created_at, last_modified_at, name)
 VALUES (9001, now(), now(), 'Custom Schema Artist')`); err != nil {
 		t.Fatal(err)
 	}
-	page, err := store.SearchArtists(
+	page, err = store.SearchArtists(
 		ctx,
 		catalog.ArtistFilter{Name: "custom schema"},
 		catalog.PageRequest{Size: 20},
@@ -541,12 +543,38 @@ VALUES (9001, now(), now(), 'Custom Schema Artist')`); err != nil {
 	if page.Items[0].ID != 9001 {
 		t.Fatalf("custom schema artist=%+v", page.Items[0])
 	}
+	for _, transition := range []struct {
+		name string
+		sql  string
+	}{
+		{"completed", `update discogs_catalog_entity_state set status = 'ready', operation = null,
+		active_import_run_id = null, last_successful_import_run_id = currval('discogs_import_run_id_seq'), ready_at = now()`},
+		{"refresh", `update discogs_catalog_entity_state set status = 'importing', operation = 'refresh',
+		active_import_run_id = currval('discogs_import_run_id_seq')`},
+		{"failed", `update discogs_catalog_entity_state set status = 'failed', active_import_run_id = null,
+		failure_message = 'test import failure'`},
+	} {
+		if _, err := customPool.Exec(ctx, transition.sql); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.Ready(ctx); err != nil {
+			t.Fatalf("%s readiness error=%v", transition.name, err)
+		}
+		if _, err := store.Artist(ctx, 9001); err != nil {
+			t.Fatalf("%s committed artist error=%v", transition.name, err)
+		}
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := store.Ready(cancelled); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled readiness error=%v", err)
+	}
 	closedPool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 	closedPool.Close()
-	if err := New(closedPool, testPublicURL, testQueryTimeout).Ready(ctx); err == nil || !strings.Contains(err.Error(), "read catalog readiness") {
+	if err := New(closedPool, testPublicURL, testQueryTimeout).Ready(ctx); err == nil || !strings.Contains(err.Error(), "check database connectivity") {
 		t.Fatalf("closed pool readiness error=%v", err)
 	}
 }

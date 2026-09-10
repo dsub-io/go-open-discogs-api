@@ -12,10 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const catalogReadinessQuery = `select ready, status from discogs_catalog_readiness`
-
-var ErrCatalogNotReady = errors.New("catalog is not ready")
-
 type Store struct {
 	pool         *pgxpool.Pool
 	serverURL    string
@@ -34,17 +30,12 @@ func (s *Store) timeout(ctx context.Context) (context.Context, context.CancelFun
 	return context.WithTimeout(ctx, s.queryTimeout)
 }
 
-// Ready reports serving readiness only after canonical bootstrap finalization succeeds.
+// Ready checks connectivity after startup schema validation, independently of import progress.
 func (s *Store) Ready(ctx context.Context) error {
 	queryContext, cancel := s.timeout(ctx)
 	defer cancel()
-	var ready bool
-	var status string
-	if err := s.pool.QueryRow(queryContext, catalogReadinessQuery).Scan(&ready, &status); err != nil {
-		return fmt.Errorf("read catalog readiness: %w", err)
-	}
-	if !ready {
-		return fmt.Errorf("%w: %s", ErrCatalogNotReady, status)
+	if err := s.pool.Ping(queryContext); err != nil {
+		return fmt.Errorf("check database connectivity: %w", err)
 	}
 	return nil
 }

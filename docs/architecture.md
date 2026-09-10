@@ -26,12 +26,18 @@ Release format quantities are served from canonical decimal text rather than
 the compatibility integer column.
 
 `/snapshot` reads canonical readiness, entity state, and successful checkpoint
-views. It exposes dump date and importer provenance without exposing source
-URIs, checksums, database details, or import failure text.
+views. Its readiness field describes import completion, not serving availability.
+It exposes last successful dump dates and importer provenance without exposing
+source URIs, checksums, database details, or import failure text. These checkpoints
+do not identify a frozen version of all records during an import.
 
 Public and management listeners are separate. Liveness checks only the process.
-Readiness performs a bounded canonical catalog-state query, which also verifies
-PostgreSQL connectivity, and remains down until bootstrap finalization commits.
+Startup validates the required schema and SELECT privileges. Readiness checks
+PostgreSQL connectivity with a bounded timeout, independently of import status.
+The API serves committed data during initial imports, refreshes and failures;
+missing resources use normal empty collection or not-found responses. There is
+no first-import serving gate or separate snapshot swap. Different records and
+relations may reflect different import stages.
 Prometheus is pull-based and local. OTLP tracing is opt-in and does not exist at
 runtime when disabled.
 

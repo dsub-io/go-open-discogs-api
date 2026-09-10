@@ -3,7 +3,7 @@
   "info": {
     "title": "OpenDiscogs API",
     "version": "1.0.0",
-    "description": "High-performance read-only API for the currently imported public Discogs monthly dump snapshot. Collection resources use stable ascending-ID cursor pagination without exact counts. Nested relation arrays are unordered, and clients must not rely on array position. The service does not call or proxy the Discogs API, perform live hydration, or accept catalog writes."
+    "description": "Read-only API for committed public Discogs monthly dump data, available during initial and subsequent imports. Records and relations can reflect different import stages; missing data returns normal empty or not-found responses. Collection resources use stable ascending-ID cursor pagination without exact counts. Nested relation arrays are unordered, and clients must not rely on array position. The service does not call or proxy the Discogs API, perform live hydration, or accept catalog writes."
   },
   "servers": [{"url": "/"}],
   "paths": {
@@ -514,7 +514,7 @@
         "type": "object",
         "required": ["ready", "status", "updated_at", "entities"],
         "properties": {
-          "ready": {"type": "boolean"},
+          "ready": {"type": "boolean", "description": "All required entities have finalized their imports. This is import completion, not API availability; committed data is served even when false."},
           "status": {"type": "string", "enum": ["bootstrap_pending", "importing", "ready", "failed"]},
           "updated_at": {"type": "string", "format": "date-time"},
           "entities": {"type": "array", "items": {"$ref": "#/components/schemas/SnapshotEntity"}, "minItems": 4, "maxItems": 4}

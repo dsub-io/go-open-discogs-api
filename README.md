@@ -19,7 +19,9 @@ The dependency direction is `catalog domain <- HTTP/PostgreSQL adapters <- app b
 
 ## Data source and freshness
 
-OpenDiscogs is a query layer over the dump snapshot currently present in PostgreSQL. It does not promise real-time parity with discogs.com. A detail request returns `404` when the resource is absent from the imported snapshot; that response does not assert that the resource is absent from Discogs. The next successful batch import is the only path by which the catalog changes.
+OpenDiscogs is a query layer over monthly dump data currently committed in PostgreSQL. It does not promise real-time parity with discogs.com. Data becomes queryable as import transactions commit, including during the first import. Missing details return `404` and empty collections return `200`; a missing resource may not have been imported yet and does not imply absence from Discogs. Records and relations can reflect different import stages, and separate requests may observe different committed versions. Batch imports are the only path by which the catalog changes.
+
+`GET /snapshot` reports import completion and the last successful checkpoints. Its `ready` field describes completion of all required entities, not API availability or a frozen version of every returned record. Import failure does not withdraw already committed data from service.
 
 `API_CACHE_CONTROL` controls reuse of OpenDiscogs HTTP responses. It is not a source-data freshness guarantee and is unrelated to the age of the imported monthly snapshot.
 
@@ -52,9 +54,10 @@ If `--database-schema` / `API_DATABASE_SCHEMA` is omitted, the API uses `public`
 
 `--help` and `--version` do not connect to PostgreSQL. `--healthcheck` probes
 `http://127.0.0.1:8081/readyz` and exits non-zero unless the management
-listener, PostgreSQL, and the canonical dump snapshot are ready. A first import
-does not become ready until deferred foreign keys are created and validated and
-the imported tables are analyzed; Compose uses this process control.
+listener and PostgreSQL are reachable. Startup validates the required schema and
+read permissions without running migrations. Import progress does not gate
+readiness: empty, importing, completed, and failed imports all permit serving
+committed data. Compose uses this process control.
 
 ## Configuration inventory
 
@@ -98,8 +101,8 @@ settings, so they do not have ENV equivalents.
 - Bounded Release children: `GET /releases/{id}/tracks` and
   `GET /releases/{id}/identifiers`
 - Liveness: management `GET /healthz`
-- Readiness: management `GET /readyz` or `GET /actuator/health`; returns down
-  while the canonical catalog is bootstrap-pending, importing, or failed
+- Readiness: management `GET /readyz` or `GET /actuator/health`; checks PostgreSQL
+  connectivity after startup schema validation, independently of import status
 - Metrics, when enabled: management `GET /metrics` or `GET /actuator/prometheus`
 
 Collections use ascending resource-ID keyset pagination. Omit `after_id` for
