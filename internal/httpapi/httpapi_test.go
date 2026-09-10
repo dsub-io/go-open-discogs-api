@@ -21,7 +21,7 @@ import (
 const (
 	testServerURL                    = "https://api.example.com"
 	testCacheControl                 = "public, max-age=10"
-	testSnapshotDescriptionFragment  = "currently imported public Discogs monthly dump snapshot"
+	testSnapshotDescriptionFragment  = "committed public Discogs monthly dump data"
 	testUnorderedDescriptionFragment = "Nested relation arrays are unordered"
 	testNotFoundDescriptionFragment  = "does not assert absence from Discogs"
 	testReleaseFormatQuantity        = "1010487400000000000000000000000000000000000000000000"
