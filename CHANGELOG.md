@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.1](https://github.com/dsub-io/go-open-discogs-api/compare/v1.2.0...v1.2.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* serve committed catalog data during all import states ([8e82d53](https://github.com/dsub-io/go-open-discogs-api/commit/8e82d5372ae08277dc7c3801a7ed3bc8821a92a0))
+* serve committed catalog data during all import states ([e893a0f](https://github.com/dsub-io/go-open-discogs-api/commit/e893a0fa3a82f3b444ff5a9e3d561c16532754ba))
+
 ## [1.2.0](https://github.com/dsub-io/go-open-discogs-api/compare/v1.1.1...v1.2.0) (2026-09-03)
 
 
