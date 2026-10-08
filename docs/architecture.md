@@ -9,7 +9,10 @@ The service has four runtime roles:
 
 The API does not import dumps or migrate the database. Import execution belongs to `go-open-discogs-batch`; canonical migrations belong to `open-discogs-model`; serving belongs here. A deployment account should have `CONNECT`, `USAGE`, and `SELECT` only.
 
-All deployments expose the same dump-only data path. The process has no Discogs API client, credential setting, anonymous upstream mode, live hydration queue, or catalog write port. A missing detail resource means only that the identifier is absent from the currently imported dump snapshot. This boundary avoids coupling the service to the Discogs API's freshness, caching, attribution, rate-limit, Restricted Data, availability, and termination conditions.
+The process reads committed monthly dump data from PostgreSQL. It has no Discogs
+API client, upstream credentials, or catalog write port. A missing resource may
+not have been imported yet; it does not imply that Discogs has no such record.
+See the README for import visibility and source terms.
 
 Collection reads use ascending resource-ID keyset pagination and fetch one
 bounded look-ahead row. They never execute an exact count query. Search is

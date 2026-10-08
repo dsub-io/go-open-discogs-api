@@ -1,8 +1,13 @@
 # go-open-discogs-api
 
-High-performance, read-only Go API for PostgreSQL databases populated from public Discogs data dumps. This is an independent DSUB project and is not affiliated with Discogs.
+Read-only Go API for PostgreSQL databases populated from public Discogs monthly
+data dumps. This is an independent DSUB project and is not affiliated with Discogs.
 
-The project is pre-release. The Java [`open-discogs-api`](https://github.com/dsub-io/open-discogs-api) remains supported until this implementation passes contract, production-data, and performance verification.
+Use this API and [Go OpenDiscogs Batch](https://github.com/dsub-io/go-open-discogs-batch)
+for new deployments. The Java API is deprecated; existing clients should review
+its [migration guide](https://github.com/dsub-io/open-discogs-api/blob/main/docs/migration-to-go.md).
+Release binaries and container versions are listed in
+[GitHub Releases](https://github.com/dsub-io/go-open-discogs-api/releases).
 
 ## Design boundaries
 
@@ -25,7 +30,10 @@ OpenDiscogs is a query layer over monthly dump data currently committed in Postg
 
 `API_CACHE_CONTROL` controls reuse of OpenDiscogs HTTP responses. It is not a source-data freshness guarantee and is unrelated to the age of the imported monthly snapshot.
 
-This boundary is intentional. The current [Discogs API Terms of Use](https://support.discogs.com/hc/en-us/articles/360009334593-API-Terms-of-Use) impose conditions including six-hour freshness, limited caching, rate-limit non-circumvention, required attribution, restrictions on transferring Restricted Data, revocable access, and broad accuracy and availability disclaimers. OpenDiscogs does not proxy that API or shift those obligations through an optional authenticated or anonymous mode. Applications that require data newer than the imported dump must evaluate and integrate the Discogs API independently under its then-current terms.
+Applications that need newer data must integrate the Discogs API separately and
+review its current [Terms of Use](https://support.discogs.com/hc/en-us/articles/360009334593-API-Terms-of-Use).
+The monthly dump and the live API are separate data sources; deployment of
+OpenDiscogs does not establish rights to use or redistribute either source.
 
 The MIT license covers this project's source code. Data remains subject to the rights and terms applicable at its source.
 
@@ -179,7 +187,8 @@ Set `API_METRICS_ENABLED=false` to remove metrics routes. Leave `API_TRACING_ENA
 
 ## Verification and performance
 
-The quality gate runs formatting, module checks, `vet`, race tests, 100% coverage, OpenAPI validation, integration/E2E tests against canonical migrations, container checks, CodeQL, and vulnerability scanning.
+See [CI and contributions](docs/ci.md) for when each check runs. Application
+changes run formatting, module checks, `vet`, race tests, 100% coverage, OpenAPI validation, integration/E2E tests against canonical migrations, container checks, CodeQL, and vulnerability scanning.
 
 Performance reports belong in [`docs/performance`](docs/performance). Each report must record the same data, hardware, concurrency, warm-up, and run count before and after, plus p50/p95/p99 latency, throughput, memory/allocation, and relevant DB query count or plan. No full-dataset claim is made without a representative dataset measurement.
 
