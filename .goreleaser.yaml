@@ -4,7 +4,7 @@ project_name: go-open-discogs-api
 
 before:
   hooks:
-    - go mod tidy
+    - go mod tidy -diff
 
 builds:
   - main: .
@@ -45,7 +45,7 @@ changelog:
 
 nfpms:
   - maintainer: DSUB <state303@dsub.io>
-    description: High-performance read-only API for OpenDiscogs PostgreSQL data.
+    description: Read-only API for OpenDiscogs PostgreSQL data.
     homepage: https://github.com/dsub-io/go-open-discogs-api
     license: MIT
     formats: [deb, rpm, apk]
