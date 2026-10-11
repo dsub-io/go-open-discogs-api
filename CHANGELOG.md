@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.2](https://github.com/dsub-io/go-open-discogs-api/compare/v1.2.1...v1.2.2) (2026-10-11)
+
+### Changes
+
+- Adopt [OpenDiscogs model v1.0.0](https://github.com/dsub-io/open-discogs-model/releases/tag/v1.0.0). Public HTTP contracts, canonical SQL bytes, and Go import paths are unchanged; no new migration is added.
+- Use Go 1.27.2 for source and container builds, including its standard-library security fixes.
+- Update pgx to 5.11.0, otelpgx to 0.13.0, kin-openapi to 0.149.0, Prometheus client to 1.25.0, OpenTelemetry to 1.47.0, and gRPC to 1.84.0. Refresh the remaining module and workflow dependencies.
+- Verify both published container architectures, version output, non-root user, OCI labels, and digest before promoting latest. Pin GoReleaser to 2.18.3 and keep release PostgreSQL storage in tmpfs.
+- Keep title and body edits outside the required CI check suite and rerun full CI when a same-repository PR changes base.
+
+The Java API is deprecated and archived. Existing clients should review its
+[Go migration guide](https://github.com/dsub-io/open-discogs-api/blob/main/docs/migration-to-go.md).
+
 ## [1.2.1](https://github.com/dsub-io/go-open-discogs-api/compare/v1.2.0...v1.2.1) (2026-09-10)
 
 
