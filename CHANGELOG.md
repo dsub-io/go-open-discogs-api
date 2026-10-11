@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/dsub-io/go-open-discogs-api/compare/v1.2.1...v1.2.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **deps:** adopt Go model v1 and update API dependencies ([aed0f4d](https://github.com/dsub-io/go-open-discogs-api/commit/aed0f4dae88fe28eaa16129ca0bc458cfe5c2fac))
+
 ## [1.2.1](https://github.com/dsub-io/go-open-discogs-api/compare/v1.2.0...v1.2.1) (2026-09-10)
 
 
