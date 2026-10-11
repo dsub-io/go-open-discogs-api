@@ -4,7 +4,7 @@ Read-only Go API for PostgreSQL databases populated from public Discogs monthly
 data dumps. This is an independent DSUB project and is not affiliated with Discogs.
 
 Use this API and [Go OpenDiscogs Batch](https://github.com/dsub-io/go-open-discogs-batch)
-for new deployments. The Java API is deprecated; existing clients should review
+for new deployments. The Java API is deprecated and archived; existing clients should review
 its [migration guide](https://github.com/dsub-io/open-discogs-api/blob/main/docs/migration-to-go.md).
 Release binaries and container versions are listed in
 [GitHub Releases](https://github.com/dsub-io/go-open-discogs-api/releases).
@@ -38,6 +38,11 @@ OpenDiscogs does not establish rights to use or redistribute either source.
 The MIT license covers this project's source code. Data remains subject to the rights and terms applicable at its source.
 
 ## Run
+
+Source builds require Go 1.27.2. This API uses
+[OpenDiscogs model v1.0.0](https://github.com/dsub-io/open-discogs-model/releases/tag/v1.0.0),
+which maintains the Go model and canonical SQL. The model release preserves
+existing SQL bytes and Go APIs and adds no migration.
 
 Use a complete PostgreSQL URL:
 
