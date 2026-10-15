@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/catalog"
-	canonicalschema "github.com/dsub-io/open-discogs-model/schema"
+	"github.com/echovisionlab/go-open-discogs-api/internal/catalog"
+	canonicalschema "github.com/echovisionlab/open-discogs-model/schema"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )

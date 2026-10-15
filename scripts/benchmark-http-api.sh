@@ -100,7 +100,7 @@ for command_name in docker go curl jq awk ps; do
   fi
 done
 
-model_root="${API_PERF_MODEL_ROOT:-$(go list -m -f '{{.Dir}}' github.com/dsub-io/open-discogs-model)}"
+model_root="${API_PERF_MODEL_ROOT:-$(go list -m -f '{{.Dir}}' github.com/echovisionlab/open-discogs-model)}"
 migration_directory="$model_root/schema/migrations"
 if [[ ! -d "$migration_directory" ]]; then
   printf 'Canonical model migrations are unavailable: %s\n' "$migration_directory" >&2
@@ -117,7 +117,7 @@ fi
 docker run \
   --detach \
   --name "$container_name" \
-  --label "io.dsub.test-owner=$test_owner" \
+  --label "io.echovisionlab.test-owner=$test_owner" \
   --tmpfs "/var/lib/postgresql:rw,noexec,nosuid,size=$postgres_tmpfs_size" \
   --env POSTGRES_USER=discogs \
   --env POSTGRES_PASSWORD=discogs \

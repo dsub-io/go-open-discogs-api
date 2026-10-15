@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/config"
+	"github.com/echovisionlab/go-open-discogs-api/internal/config"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )

@@ -6,9 +6,9 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/buildinfo"
-	"github.com/dsub-io/go-open-discogs-api/internal/catalog"
-	"github.com/dsub-io/go-open-discogs-api/internal/observability"
+	"github.com/echovisionlab/go-open-discogs-api/internal/buildinfo"
+	"github.com/echovisionlab/go-open-discogs-api/internal/catalog"
+	"github.com/echovisionlab/go-open-discogs-api/internal/observability"
 )
 
 const (

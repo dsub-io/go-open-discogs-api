@@ -8,18 +8,18 @@ readonly api_container="${owner}-api"
 readonly database_container="${owner}-database"
 readonly network="${owner}-network"
 readonly postgres_image="postgres:18-alpine"
-readonly model_module="github.com/dsub-io/open-discogs-model"
+readonly model_module="github.com/echovisionlab/open-discogs-model"
 postgres_image_was_present=false
 
 container_owner() {
   docker inspect \
-    --format '{{index .Config.Labels "io.dsub.test-owner"}}' \
+    --format '{{index .Config.Labels "io.echovisionlab.test-owner"}}' \
     "$1" 2>/dev/null || true
 }
 
 network_owner() {
   docker network inspect \
-    --format '{{index .Labels "io.dsub.test-owner"}}' \
+    --format '{{index .Labels "io.echovisionlab.test-owner"}}' \
     "$1" 2>/dev/null || true
 }
 
@@ -89,13 +89,13 @@ if [ "$configured_healthcheck" != '["CMD","/go-open-discogs-api","--healthcheck"
 fi
 
 docker network create \
-  --label "io.dsub.test-owner=$owner" \
+  --label "io.echovisionlab.test-owner=$owner" \
   "$network" >/dev/null
 
 docker run \
   --detach \
   --name "$database_container" \
-  --label "io.dsub.test-owner=$owner" \
+  --label "io.echovisionlab.test-owner=$owner" \
   --network "$network" \
   --network-alias database \
   --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=512m \
@@ -152,7 +152,7 @@ done
 docker run \
   --detach \
   --name "$api_container" \
-  --label "io.dsub.test-owner=$owner" \
+  --label "io.echovisionlab.test-owner=$owner" \
   --network "$network" \
   --read-only \
   --user 65532:65532 \

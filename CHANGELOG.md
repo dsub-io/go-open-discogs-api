@@ -1,39 +1,39 @@
 # Changelog
 
-## [1.2.2](https://github.com/dsub-io/go-open-discogs-api/compare/v1.2.1...v1.2.2) (2026-10-11)
+## [1.2.2](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.2.1...v1.2.2) (2026-10-11)
 
 ### Changes
 
-- Adopt [OpenDiscogs model v1.0.0](https://github.com/dsub-io/open-discogs-model/releases/tag/v1.0.0). Public HTTP contracts, canonical SQL bytes, and Go import paths are unchanged; no new migration is added.
+- Adopt [OpenDiscogs model v1.0.0](https://github.com/echovisionlab/open-discogs-model/releases/tag/v1.0.0). Public HTTP contracts, canonical SQL bytes, and Go import paths are unchanged; no new migration is added.
 - Use Go 1.27.2 for source and container builds, including its standard-library security fixes.
 - Update pgx to 5.11.0, otelpgx to 0.13.0, kin-openapi to 0.149.0, Prometheus client to 1.25.0, OpenTelemetry to 1.47.0, and gRPC to 1.84.0. Refresh the remaining module and workflow dependencies.
 - Verify both published container architectures, version output, non-root user, OCI labels, and digest before promoting latest. Pin GoReleaser to 2.18.3 and keep release PostgreSQL storage in tmpfs.
 - Keep title and body edits outside the required CI check suite and rerun full CI when a same-repository PR changes base.
 
 The Java API is deprecated and archived. Existing clients should review its
-[Go migration guide](https://github.com/dsub-io/open-discogs-api/blob/main/docs/migration-to-go.md).
+[Go migration guide](https://github.com/echovisionlab/open-discogs-api/blob/main/docs/migration-to-go.md).
 
-## [1.2.1](https://github.com/dsub-io/go-open-discogs-api/compare/v1.2.0...v1.2.1) (2026-09-10)
+## [1.2.1](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.2.0...v1.2.1) (2026-09-10)
 
 
 ### Bug Fixes
 
-* serve committed catalog data during all import states ([8e82d53](https://github.com/dsub-io/go-open-discogs-api/commit/8e82d5372ae08277dc7c3801a7ed3bc8821a92a0))
-* serve committed catalog data during all import states ([e893a0f](https://github.com/dsub-io/go-open-discogs-api/commit/e893a0fa3a82f3b444ff5a9e3d561c16532754ba))
+* serve committed catalog data during all import states ([8e82d53](https://github.com/echovisionlab/go-open-discogs-api/commit/8e82d5372ae08277dc7c3801a7ed3bc8821a92a0))
+* serve committed catalog data during all import states ([e893a0f](https://github.com/echovisionlab/go-open-discogs-api/commit/e893a0fa3a82f3b444ff5a9e3d561c16532754ba))
 
-## [1.2.0](https://github.com/dsub-io/go-open-discogs-api/compare/v1.1.1...v1.2.0) (2026-09-03)
+## [1.2.0](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.1.1...v1.2.0) (2026-09-03)
 
 
 ### Features
 
-* expand catalog query API ([#12](https://github.com/dsub-io/go-open-discogs-api/issues/12)) ([b58dce2](https://github.com/dsub-io/go-open-discogs-api/commit/b58dce22efeb866a4c67fbdcc4ba2e3f2b6efe9d))
+* expand catalog query API ([#12](https://github.com/echovisionlab/go-open-discogs-api/issues/12)) ([b58dce2](https://github.com/echovisionlab/go-open-discogs-api/commit/b58dce22efeb866a4c67fbdcc4ba2e3f2b6efe9d))
 
-## [1.1.1](https://github.com/dsub-io/go-open-discogs-api/compare/v1.1.0...v1.1.1) (2026-08-13)
+## [1.1.1](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.1.0...v1.1.1) (2026-08-13)
 
 
 ### Bug Fixes
 
-* make readiness follow canonical catalog bootstrap and refresh state instead of database connectivity alone ([#10](https://github.com/dsub-io/go-open-discogs-api/issues/10)) ([66ccd93](https://github.com/dsub-io/go-open-discogs-api/commit/66ccd933dc43805c88daa1e56205b6cfdc40aae5))
+* make readiness follow canonical catalog bootstrap and refresh state instead of database connectivity alone ([#10](https://github.com/echovisionlab/go-open-discogs-api/issues/10)) ([66ccd93](https://github.com/echovisionlab/go-open-discogs-api/commit/66ccd933dc43805c88daa1e56205b6cfdc40aae5))
 * preserve collision-safe relation identities, multiple label catalog numbers, oversized format quantities, and unordered relation semantics
 * bound artist-release role aggregation after the cursor and consume `open-discogs-model` `v0.3.2`
 
@@ -51,38 +51,38 @@ The Java API is deprecated and archived. Existing clients should review its
 * pass race-enabled tests, `100.0%` aggregate statement coverage, CodeQL, vulnerability checks, Compose/Kubernetes validation, and container readiness/dependency-failure tests without Docker residue
 * the API remains read-only and never migrates; deploy `open-discogs-model` `v0.3.2` V022 through either batch before starting this version
 
-## [1.1.0](https://github.com/dsub-io/go-open-discogs-api/compare/v1.0.0...v1.1.0) (2026-08-11)
+## [1.1.0](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.0.0...v1.1.0) (2026-08-11)
 
 
 ### Features
 
-* add operator-selected PostgreSQL schemas through `--database-schema` and `API_DATABASE_SCHEMA` ([e2a9b7c](https://github.com/dsub-io/go-open-discogs-api/commit/e2a9b7c871143f662a048f876e30f9e40a7fe2c3))
+* add operator-selected PostgreSQL schemas through `--database-schema` and `API_DATABASE_SCHEMA` ([e2a9b7c](https://github.com/echovisionlab/go-open-discogs-api/commit/e2a9b7c871143f662a048f876e30f9e40a7fe2c3))
 * validate schema existence, `USAGE`, required tables, and `SELECT` privileges before opening listeners
 * retain `public` as the compatibility default while warning on every startup and keeping the API read-only
 
 
 ### Bug Fixes
 
-* download and validate canonical model migrations before fresh-runner readiness tests ([bf6ab76](https://github.com/dsub-io/go-open-discogs-api/commit/bf6ab7612583affd3de9656169bd877b11f23b85))
-* reject out-of-range database connection counts before narrowing to pgx `int32`, resolving CodeQL CWE-190 and CWE-681 ([7d83a61](https://github.com/dsub-io/go-open-discogs-api/commit/7d83a614404d54ea39811f80109eb525776f53c9))
+* download and validate canonical model migrations before fresh-runner readiness tests ([bf6ab76](https://github.com/echovisionlab/go-open-discogs-api/commit/bf6ab7612583affd3de9656169bd877b11f23b85))
+* reject out-of-range database connection counts before narrowing to pgx `int32`, resolving CodeQL CWE-190 and CWE-681 ([7d83a61](https://github.com/echovisionlab/go-open-discogs-api/commit/7d83a614404d54ea39811f80109eb525776f53c9))
 
 ## 1.0.0 (2026-08-11)
 
 
 ### Features
 
-* provide a read-only Go API for Artist, Label, Master, and Release data imported from Discogs monthly public dumps, with a validated OpenAPI contract ([1698e9f](https://github.com/dsub-io/go-open-discogs-api/commit/1698e9f97d9d7f2475e885693224771c925f1148))
+* provide a read-only Go API for Artist, Label, Master, and Release data imported from Discogs monthly public dumps, with a validated OpenAPI contract ([1698e9f](https://github.com/echovisionlab/go-open-discogs-api/commit/1698e9f97d9d7f2475e885693224771c925f1148))
 * expose matching typed CLI and environment configuration, separate public and management listeners, optional metrics and tracing, graceful shutdown, Docker Compose, and Kubernetes examples
 
 
 ### Bug Fixes
 
-* make the container healthcheck probe database-backed `/readyz`, report unhealthy after PostgreSQL becomes unavailable, and validate exact Docker resource cleanup ([1efe561](https://github.com/dsub-io/go-open-discogs-api/commit/1efe5616c57960e14cd6e13319ee07eb2847afff))
+* make the container healthcheck probe database-backed `/readyz`, report unhealthy after PostgreSQL becomes unavailable, and validate exact Docker resource cleanup ([1efe561](https://github.com/echovisionlab/go-open-discogs-api/commit/1efe5616c57960e14cd6e13319ee07eb2847afff))
 
 
 ### Performance Improvements
 
-* replace offset pagination and exact totals with ascending-ID keyset pagination, one bounded look-ahead row, and one database query per collection request ([4c19830](https://github.com/dsub-io/go-open-discogs-api/commit/4c19830a82d684ded71e39140c4faf8265d6bae9))
+* replace offset pagination and exact totals with ascending-ID keyset pagination, one bounded look-ahead row, and one database query per collection request ([4c19830](https://github.com/echovisionlab/go-open-discogs-api/commit/4c19830a82d684ded71e39140c4faf8265d6bae9))
 * on the same warm-cache PostgreSQL 18.4 synthetic dataset, deep release pagination p95 fell from `183.106 ms` to `0.038 ms` (`99.979%` lower, `4,818.6x` faster), title-contains search p95 from `194.535 ms` to `0.136 ms` (`99.930%` lower, `1,430.4x` faster), and artist-relation lookup p95 from `17.309 ms` to `0.061 ms` (`99.648%` lower, `283.8x` faster)
 * eliminate the old exact-count query (`35.706 ms` p95 in the benchmark) and reduce collection query count from two to one
 

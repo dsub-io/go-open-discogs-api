@@ -1,9 +1,9 @@
-module github.com/dsub-io/go-open-discogs-api
+module github.com/echovisionlab/go-open-discogs-api
 
 go 1.27.2
 
 require (
-	github.com/dsub-io/open-discogs-model v1.0.0
+	github.com/echovisionlab/open-discogs-model v1.0.1
 	github.com/exaring/otelpgx v0.13.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/jackc/pgx/v5 v5.11.0

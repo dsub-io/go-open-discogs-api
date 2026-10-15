@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"net/url"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/buildinfo"
-	"github.com/dsub-io/go-open-discogs-api/internal/config"
-	"github.com/dsub-io/go-open-discogs-api/internal/observability"
+	"github.com/echovisionlab/go-open-discogs-api/internal/buildinfo"
+	"github.com/echovisionlab/go-open-discogs-api/internal/config"
+	"github.com/echovisionlab/go-open-discogs-api/internal/observability"
 	"github.com/exaring/otelpgx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"

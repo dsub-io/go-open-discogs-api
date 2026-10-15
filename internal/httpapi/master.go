@@ -4,7 +4,7 @@ import (
 	"math"
 	"net/http"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/catalog"
+	"github.com/echovisionlab/go-open-discogs-api/internal/catalog"
 )
 
 type MasterHandler struct {
