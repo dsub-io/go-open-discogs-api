@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.2.2...v1.2.3) (2026-10-15)
+
+
+### Bug Fixes
+
+* publish as github.com/echovisionlab/go-open-discogs-api ([#30](https://github.com/echovisionlab/go-open-discogs-api/issues/30)) ([ad7edf8](https://github.com/echovisionlab/go-open-discogs-api/commit/ad7edf832aa2ec138d020e5279a25270569ac767))
+
 ## [1.2.2](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.2.1...v1.2.2) (2026-10-11)
 
 ### Changes
