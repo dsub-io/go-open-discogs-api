@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/catalog"
+	"github.com/echovisionlab/go-open-discogs-api/internal/catalog"
 )
 
 func (s *Store) Artist(ctx context.Context, id int64) (catalog.ArtistDetail, error) {

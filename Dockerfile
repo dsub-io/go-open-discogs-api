@@ -8,7 +8,7 @@ COPY . .
 ARG VERSION=development
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
-    -ldflags="-s -w -X github.com/dsub-io/go-open-discogs-api/internal/buildinfo.Version=${VERSION}" \
+    -ldflags="-s -w -X github.com/echovisionlab/go-open-discogs-api/internal/buildinfo.Version=${VERSION}" \
     -o /out/go-open-discogs-api \
     .
 

@@ -1,19 +1,19 @@
 # go-open-discogs-api
 
 Read-only Go API for PostgreSQL databases populated from public Discogs monthly
-data dumps. This is an independent DSUB project and is not affiliated with Discogs.
+data dumps. This is an independent echovisionlab project and is not affiliated with Discogs.
 
-Use this API and [Go OpenDiscogs Batch](https://github.com/dsub-io/go-open-discogs-batch)
+Use this API and [Go OpenDiscogs Batch](https://github.com/echovisionlab/go-open-discogs-batch)
 for new deployments. The Java API is deprecated and archived; existing clients should review
-its [migration guide](https://github.com/dsub-io/open-discogs-api/blob/main/docs/migration-to-go.md).
+its [migration guide](https://github.com/echovisionlab/open-discogs-api/blob/main/docs/migration-to-go.md).
 Release binaries and container versions are listed in
-[GitHub Releases](https://github.com/dsub-io/go-open-discogs-api/releases).
+[GitHub Releases](https://github.com/echovisionlab/go-open-discogs-api/releases).
 
 ## Design boundaries
 
 - Public HTTP (`:8080`) serves the catalog and OpenAPI contract.
 - Management HTTP (`127.0.0.1:8081`) serves liveness, readiness, and optional Prometheus metrics.
-- PostgreSQL access is read-only. Schema and index migrations belong to [`open-discogs-model`](https://github.com/dsub-io/open-discogs-model), never this service.
+- PostgreSQL access is read-only. Schema and index migrations belong to [`open-discogs-model`](https://github.com/echovisionlab/open-discogs-model), never this service.
 - `API_DATABASE_SCHEMA` selects the already-imported schema. The API verifies schema usage, required tables, and `SELECT` privileges at startup but never creates or migrates database objects.
 - Every deployment serves only data imported from the public monthly Discogs data dumps. The service never calls the Discogs API, accepts Discogs credentials, performs live hydration, or accepts catalog writes.
 - OTLP tracing is opt-in. With tracing disabled, no exporter or telemetry network activity is created.
@@ -40,7 +40,7 @@ The MIT license covers this project's source code. Data remains subject to the r
 ## Run
 
 Source builds require Go 1.27.2. This API uses
-[OpenDiscogs model v1.0.0](https://github.com/dsub-io/open-discogs-model/releases/tag/v1.0.0),
+[OpenDiscogs model v1.0.0](https://github.com/echovisionlab/open-discogs-model/releases/tag/v1.0.0),
 which maintains the Go model and canonical SQL. The model release preserves
 existing SQL bytes and Go APIs and adds no migration.
 
@@ -176,7 +176,7 @@ docker run --rm --read-only \
 
 [`compose.yaml`](compose.yaml) and [`deploy/kubernetes`](deploy/kubernetes) use the same ports and ENV names. The Kubernetes example separates non-secret ConfigMap values from the database URL Secret and includes startup, readiness, liveness, resource, security, and termination settings.
 
-Release tags publish multi-architecture `linux/amd64` and `linux/arm64` images to `ghcr.io/dsub-io/go-open-discogs-api`.
+Release tags publish multi-architecture `linux/amd64` and `linux/arm64` images to `ghcr.io/echovisionlab/go-open-discogs-api`.
 
 ## Resource sizing
 

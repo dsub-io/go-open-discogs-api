@@ -7,8 +7,8 @@ github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XL
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=
 github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
-github.com/dsub-io/open-discogs-model v1.0.0 h1:C40maG4fiIZhoWl5RyoklDzu5Ojz7c6Hk2yNbtaaHLw=
-github.com/dsub-io/open-discogs-model v1.0.0/go.mod h1:fzApPH6BRUaM+yiZibcNgLABM8/5EmI0qV8cVlfYmL0=
+github.com/echovisionlab/open-discogs-model v1.0.1 h1:TZ4ZLdUdayE9+4e/AUjXHDoReemvoW0B+xseF2Q4V00=
+github.com/echovisionlab/open-discogs-model v1.0.1/go.mod h1:WZZyNlIu8NORNgLRpVlJflXTNpBgOePuQkiLHdIaNSo=
 github.com/exaring/otelpgx v0.13.0 h1:Vi0I2GWRS3nnVzgr73L/XbSLqthR0h6A1rm4Wt3W4aA=
 github.com/exaring/otelpgx v0.13.0/go.mod h1:3OojrUKhhy3lTbYIMBijP3YjMey/jo14eHAW5cXcUdk=
 github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc=

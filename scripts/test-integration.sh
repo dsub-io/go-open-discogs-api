@@ -35,7 +35,7 @@ fi
 docker run \
   --detach \
   --name "$container_name" \
-  --label io.dsub.test-owner=go-open-discogs-api \
+  --label io.echovisionlab.test-owner=go-open-discogs-api \
   --tmpfs /var/lib/postgresql:rw,noexec,nosuid,size=1g \
   --env POSTGRES_USER=discogs \
   --env POSTGRES_PASSWORD=discogs \

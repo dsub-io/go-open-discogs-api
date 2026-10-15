@@ -14,10 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/app"
-	"github.com/dsub-io/go-open-discogs-api/internal/buildinfo"
-	"github.com/dsub-io/go-open-discogs-api/internal/config"
-	"github.com/dsub-io/go-open-discogs-api/internal/healthcheck"
+	"github.com/echovisionlab/go-open-discogs-api/internal/app"
+	"github.com/echovisionlab/go-open-discogs-api/internal/buildinfo"
+	"github.com/echovisionlab/go-open-discogs-api/internal/config"
+	"github.com/echovisionlab/go-open-discogs-api/internal/healthcheck"
 )
 
 const (

@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/catalog"
-	"github.com/dsub-io/go-open-discogs-api/internal/observability"
+	"github.com/echovisionlab/go-open-discogs-api/internal/catalog"
+	"github.com/echovisionlab/go-open-discogs-api/internal/observability"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/prometheus/client_golang/prometheus"
 )

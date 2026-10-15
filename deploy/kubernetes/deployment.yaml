@@ -21,7 +21,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: api
-          image: ghcr.io/dsub-io/go-open-discogs-api:latest
+          image: ghcr.io/echovisionlab/go-open-discogs-api:latest
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dsub-io/go-open-discogs-api/internal/catalog"
+	"github.com/echovisionlab/go-open-discogs-api/internal/catalog"
 	"github.com/jackc/pgx/v5"
 )
 
