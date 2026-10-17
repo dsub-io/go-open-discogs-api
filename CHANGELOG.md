@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.5](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.2.4...v1.2.5) (2026-10-17)
+
+
+### Bug Fixes
+
+* initialize API reference once and cross-compile release images ([#34](https://github.com/echovisionlab/go-open-discogs-api/issues/34)) ([76d61fd](https://github.com/echovisionlab/go-open-discogs-api/commit/76d61fdd060e8f0f5af3728db2bf095048949814))
+
 ## [1.2.4](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.2.3...v1.2.4) (2026-10-17)
 
 
