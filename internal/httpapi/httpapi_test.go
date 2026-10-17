@@ -56,6 +56,10 @@ func TestRouterServesEveryContractRoute(t *testing.T) {
 		{RouteSnapshot, `"entities"`},
 		{RouteOpenAPI, `"openapi": "3.1.0"`},
 		{RouteOpenAPIJSON, `"openapi": "3.1.0"`},
+		{RouteDocumentation, `<title>OpenDiscogs API reference</title>`},
+		{"/docs/", `<title>OpenDiscogs API reference</title>`},
+		{RouteDocumentationJS, `url: '/openapi.json'`},
+		{RouteScalarJS, `createApiReference`},
 		{RouteVersion, `"version"`},
 	}
 	for _, test := range tests {
@@ -73,6 +77,45 @@ func TestRouterServesEveryContractRoute(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), logMessageRequest) {
 		t.Fatalf("access log missing: %s", logs.String())
+	}
+}
+
+func TestDocumentationIsPublicAndUsesOnlySameOriginAssets(t *testing.T) {
+	t.Parallel()
+	handler := testRouter(&repositoryStub{err: errRepository}, false, &bytes.Buffer{})
+	for _, path := range []string{RouteDocumentation, "/docs/", RouteDocumentationJS, RouteScalarJS, RouteOpenAPIJSON} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("documentation depends on catalog availability: path=%s status=%d", path, response.Code)
+		}
+	}
+	page := httptest.NewRecorder()
+	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, RouteDocumentation, nil))
+	if page.Header().Get(HeaderContentType) != ContentTypeHTML || !strings.Contains(page.Header().Get("Content-Security-Policy"), "connect-src 'self'") {
+		t.Fatalf("unexpected documentation headers: %v", page.Header())
+	}
+	for _, src := range []string{RouteDocumentationJS, RouteScalarJS} {
+		if !strings.Contains(page.Body.String(), `src="`+src+`"`) {
+			t.Fatalf("missing local asset %s", src)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, src, nil))
+		if response.Header().Get(HeaderContentType) != ContentTypeJavaScript {
+			t.Fatalf("unexpected script MIME type: %v", response.Header())
+		}
+	}
+	for _, setting := range []string{"proxyUrl: ''", "persistAuth: false", "telemetry: false", "withDefaultFonts: false", "window.location.origin"} {
+		if !strings.Contains(string(documentationScript), setting) {
+			t.Fatalf("missing local-only reference setting: %s", setting)
+		}
+	}
+	for _, path := range []string{"/docs/internal", "/docs/scalar-1.75.0.js.map", "/docs/../healthz"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code == http.StatusOK {
+			t.Fatalf("unexpected documentation route: %s", path)
+		}
 	}
 }
 

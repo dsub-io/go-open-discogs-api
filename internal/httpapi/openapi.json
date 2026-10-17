@@ -6,6 +6,7 @@
     "description": "Read-only API for committed public Discogs monthly dump data, available during initial and subsequent imports. Records and relations can reflect different import stages; missing data returns normal empty or not-found responses. Collection resources use stable ascending-ID cursor pagination without exact counts. Nested relation arrays are unordered, and clients must not rely on array position. The service does not call or proxy the Discogs API, perform live hydration, or accept catalog writes."
   },
   "servers": [{"url": "/"}],
+  "security": [{"personalAccessToken": []}],
   "paths": {
     "/artists": {
       "get": {
@@ -239,6 +240,14 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "personalAccessToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "pat_<selector>.<secret>",
+        "description": "The rawsector gateway requires a personal access token from your account settings. Authentication is enforced by the gateway; standalone deployments must provide their own authentication boundary."
+      }
+    },
     "parameters": {
       "ID": {"name": "id", "in": "path", "required": true, "schema": {"type": "integer", "format": "int64", "minimum": 1, "maximum": 2147483647}},
       "AfterID": {"name": "after_id", "in": "query", "description": "Return records with an ID greater than this cursor. Omit or use zero for the first page.", "schema": {"type": "integer", "format": "int64", "minimum": 0, "maximum": 2147483647, "default": 0}},

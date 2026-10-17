@@ -108,6 +108,7 @@ settings, so they do not have ENV equivalents.
 
 ## HTTP contracts
 
+- Interactive API reference: `GET /docs` (JavaScript assets are embedded in the binary).
 - OpenAPI 3.1: `GET /openapi.json` or compatibility path `GET /v3/api-docs`
 - Build version: `GET /version`
 - Imported snapshot provenance: `GET /snapshot`
@@ -117,6 +118,11 @@ settings, so they do not have ENV equivalents.
 - Readiness: management `GET /readyz` or `GET /actuator/health`; checks PostgreSQL
   connectivity after startup schema validation, independently of import status
 - Metrics, when enabled: management `GET /metrics` or `GET /actuator/prometheus`
+
+The rawsector gateway publishes the reference and `/openapi.json` without a
+token. Catalog requests from the reference use your rawsector personal access
+token and count toward the same limits as other API clients. The service itself
+does not validate tokens; authentication belongs to the deployment gateway.
 
 Collections use ascending resource-ID keyset pagination. Omit `after_id` for
 the first page, then pass the response's non-null `next_after_id` while
