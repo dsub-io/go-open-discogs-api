@@ -92,6 +92,10 @@ func TestDocumentationIsPublicAndUsesOnlySameOriginAssets(t *testing.T) {
 	}
 	page := httptest.NewRecorder()
 	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, RouteDocumentation, nil))
+	// The standalone bundle automatically mounts this reserved ID before our script runs.
+	if strings.Contains(page.Body.String(), `id="api-reference"`) {
+		t.Fatal("programmatic initialization must not use Scalar's automatic mount ID")
+	}
 	if page.Header().Get(HeaderContentType) != ContentTypeHTML || !strings.Contains(page.Header().Get("Content-Security-Policy"), "connect-src 'self'") {
 		t.Fatalf("unexpected documentation headers: %v", page.Header())
 	}
