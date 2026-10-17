@@ -95,7 +95,11 @@ func (r *Responder) Problem(writer http.ResponseWriter, request *http.Request, s
 }
 
 func (r *Responder) Document(writer http.ResponseWriter, document []byte) {
-	writer.Header().Set(HeaderContentType, ContentTypeJSON)
+	r.Asset(writer, ContentTypeJSON, document)
+}
+
+func (r *Responder) Asset(writer http.ResponseWriter, contentType string, document []byte) {
+	writer.Header().Set(HeaderContentType, contentType)
 	writer.Header().Set(HeaderContentLength, strconv.Itoa(len(document)))
 	if r.cacheControl != "" {
 		writer.Header().Set(HeaderCacheControl, r.cacheControl)

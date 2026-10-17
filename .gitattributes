@@ -1,0 +1,2 @@
+# Keep the pinned upstream browser bundle byte-for-byte; review its checksum and source metadata.
+internal/httpapi/docs/scalar-1.75.0.js -diff linguist-vendored

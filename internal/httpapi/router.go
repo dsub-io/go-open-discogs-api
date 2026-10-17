@@ -68,6 +68,10 @@ func (r *Router) Handler() http.Handler {
 	r.handle(mux, RouteSnapshot, snapshotHandler.Get)
 	r.handle(mux, RouteOpenAPI, documentationHandler.OpenAPI)
 	r.handle(mux, RouteOpenAPIJSON, documentationHandler.OpenAPI)
+	r.handle(mux, RouteDocumentation, documentationHandler.Reference)
+	r.handle(mux, RouteDocumentationSlash, documentationHandler.Reference)
+	r.handle(mux, RouteDocumentationJS, documentationHandler.ReferenceScript)
+	r.handle(mux, RouteScalarJS, documentationHandler.ScalarScript)
 	r.handle(mux, RouteVersion, r.version)
 	return securityHeaders(mux)
 }
