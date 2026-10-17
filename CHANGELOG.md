@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.4](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.2.3...v1.2.4) (2026-10-17)
+
+
+### Bug Fixes
+
+* restore API reference with embedded documentation assets ([#32](https://github.com/echovisionlab/go-open-discogs-api/issues/32)) ([f1e9bac](https://github.com/echovisionlab/go-open-discogs-api/commit/f1e9bac6f483a2053f9cec2fd221bfc7bc5ad6ef))
+
 ## [1.2.3](https://github.com/echovisionlab/go-open-discogs-api/compare/v1.2.2...v1.2.3) (2026-10-15)
 
 
