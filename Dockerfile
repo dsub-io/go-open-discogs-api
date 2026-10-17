@@ -1,4 +1,4 @@
-FROM golang:1.27.2-alpine3.23 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine3.23 AS build
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -6,7 +6,9 @@ RUN go mod download
 COPY . .
 
 ARG VERSION=development
-RUN CGO_ENABLED=0 GOOS=linux go build \
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -trimpath \
     -ldflags="-s -w -X github.com/echovisionlab/go-open-discogs-api/internal/buildinfo.Version=${VERSION}" \
     -o /out/go-open-discogs-api \
